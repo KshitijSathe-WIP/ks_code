@@ -1,0 +1,1640 @@
+{
+  "schema_version": "1.0",
+  "last_updated": "2026-04-09T15:05:29.773824",
+  "snapshots": [
+    {
+      "date": "2026-04-08",
+      "file_source": "TD Bank ZCOP 08-Apr-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {
+          "ABHISHEK AICH": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "ABHISHEK AICH Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amit Goyal": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO Wise LOB Billed Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Cody Garten": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Cody Garten Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Name": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Billable category Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Country Billing summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise NGA Index Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM_Wise Daily Change": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Dan Bosman": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Dan Bosman Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Grand Total": {
+            "count": 6,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "LEAVE_STAT": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meredith Krishnasamy": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meredith Krishnasamy Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ranjith Ravindranath": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ranjith Ravindranath Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Service Now": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Service Now Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sum of NET_BILLED": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "TM_NAME": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          }
+        },
+        "by_business_line": {},
+        "by_client_vp": {}
+      },
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ],
+      "notes": ""
+    },
+    {
+      "date": "2026-04-07",
+      "file_source": "TD Bank ZCOP 07-Apr-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {
+          "ABHISHEK AICH": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "ABHISHEK AICH Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amit Goyal": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO Wise LOB Billed Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Cody Garten": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Cody Garten Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Name": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Billable category Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Country Billing summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise NGA Index Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM_Wise Daily Change": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Dan Bosman": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Dan Bosman Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Grand Total": {
+            "count": 6,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "LEAVE_STAT": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meredith Krishnasamy": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meredith Krishnasamy Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ranjith Ravindranath": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ranjith Ravindranath Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Service Now": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Service Now Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sum of NET_BILLED": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "TM_NAME": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          }
+        },
+        "by_business_line": {},
+        "by_client_vp": {}
+      },
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ],
+      "notes": ""
+    },
+    {
+      "date": "2026-04-06",
+      "file_source": "TD Bank ZCOP 06-Apr-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2003.49,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 1.0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "Technology Services": {
+            "count": 1846,
+            "billable_hours": 1821.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 147,
+            "billable_hours": 143.49
+          },
+          "Wipro Engineering": {
+            "count": 23,
+            "billable_hours": 23.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2032,
+            "billable_hours": 2003.49
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-04-03",
+      "file_source": "TD Bank ZCOP 03-Apr-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2006.49,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 1.0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "Technology Services": {
+            "count": 1853,
+            "billable_hours": 1826.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 145,
+            "billable_hours": 141.49
+          },
+          "Wipro Engineering": {
+            "count": 23,
+            "billable_hours": 23.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2037,
+            "billable_hours": 2006.49
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-04-02",
+      "file_source": "TD Bank ZCOP 02-Apr-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2008.49,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "Technology Services": {
+            "count": 1858,
+            "billable_hours": 1830.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 141,
+            "billable_hours": 139.49
+          },
+          "Wipro Engineering": {
+            "count": 24,
+            "billable_hours": 23.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2039,
+            "billable_hours": 2008.49
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-03-31",
+      "file_source": "TD Bank ZCOP 31-Mar-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2027.49,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "Technology Services": {
+            "count": 1868,
+            "billable_hours": 1841.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 150,
+            "billable_hours": 148.49
+          },
+          "Wipro Engineering": {
+            "count": 22,
+            "billable_hours": 22.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2056,
+            "billable_hours": 2027.49
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-02-05",
+      "file_source": "TD Bank ZCOP 5-Feb-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2080.3900000000003,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "OTHERS": {
+            "count": 1,
+            "billable_hours": 1.0
+          },
+          "Technology Services": {
+            "count": 1908,
+            "billable_hours": 1896.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 153,
+            "billable_hours": 150.39000000000001
+          },
+          "Wipro Engineering": {
+            "count": 17,
+            "billable_hours": 17.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2095,
+            "billable_hours": 2080.3900000000003
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-02-04",
+      "file_source": "TD Bank ZCOP 4-Feb-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 1885.39,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 16,
+            "billable_hours": 16.0
+          },
+          "OTHERS": {
+            "count": 1,
+            "billable_hours": 1.0
+          },
+          "Technology Services": {
+            "count": 1738,
+            "billable_hours": 1725.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 131,
+            "billable_hours": 128.39000000000001
+          },
+          "Wipro Engineering": {
+            "count": 15,
+            "billable_hours": 15.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 1901,
+            "billable_hours": 1885.39
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    },
+    {
+      "date": "2026-02-03",
+      "file_source": "TD Bank ZCOP 3-Feb-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {
+          "ABHISHEK AICH": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "ABHISHEK AICH Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ashok Samudrapandian": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah and Amol Mulay": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO Wise LOB Billed Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Name": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Billable category Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Country Billing summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise NGA Index Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM_Wise Daily Change": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Grand Total": {
+            "count": 6,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jyotsana Jagadish": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jyotsana Jagadish Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "LEAVE_STAT": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Stephen Boyle Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sum of NET_BILLED": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "TM_NAME": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Vijay Pandey": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Vijay Pandey Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          }
+        },
+        "by_business_line": {},
+        "by_client_vp": {}
+      },
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ],
+      "notes": ""
+    },
+    {
+      "date": "2026-01-29",
+      "file_source": "TD Bank ZCOP 29-Jan-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {
+          "ABHISHEK AICH": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "ABHISHEK AICH Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "AMIT GOYAL Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Amol Mulay Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ashok Samudrapandian": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Balagee Ramiah and Amol Mulay": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "CIO Wise LOB Billed Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Christina Petrou Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Name": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Billable category Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise Country Billing summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM Wise NGA Index Summary": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DM_Wise Daily Change": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "DOP Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Grand Total": {
+            "count": 6,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Hardik Sanghavi Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "James Salem Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Jeff Martin Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "John Taht Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kalidass R Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Kiran Vuppu Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "LEAVE_STAT": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Meghan Faughnan Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Ravishankar Natesan Subramanian Kumar Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Salim Jivraj Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Shriram C M Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sophia Leung Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Sum of NET_BILLED": {
+            "count": 4,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "TM_NAME": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Vijay Pandey": {
+            "count": 5,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          },
+          "Vijay Pandey Total": {
+            "count": 1,
+            "billable_hours": 0,
+            "non_billable_hours": 0
+          }
+        },
+        "by_business_line": {},
+        "by_client_vp": {}
+      },
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ],
+      "notes": ""
+    },
+    {
+      "date": "2026-01-28",
+      "file_source": "TD Bank ZCOP 28-Jan-2026.xlsx",
+      "metrics": {
+        "billable": {
+          "hours": 2100.39,
+          "cost": 0
+        },
+        "non_billable": {
+          "hours": 1.0,
+          "cost": 0
+        },
+        "nga": {
+          "allocation_count": 0,
+          "percentage_of_total": 0.0
+        },
+        "ramp_up": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        },
+        "ramp_down": {
+          "count": 0,
+          "percentage_of_billable": 0.0
+        }
+      },
+      "dimensions": {
+        "by_dm": {},
+        "by_business_line": {
+          "Business Process Services": {
+            "count": 15,
+            "billable_hours": 15.0
+          },
+          "Technology Services": {
+            "count": 1926,
+            "billable_hours": 1909.0
+          },
+          "WIPRO CONSULTING": {
+            "count": 160,
+            "billable_hours": 158.39000000000001
+          },
+          "Wipro Engineering": {
+            "count": 19,
+            "billable_hours": 18.0
+          }
+        },
+        "by_client_vp": {
+          "TD BANK": {
+            "count": 2120,
+            "billable_hours": 2100.39
+          }
+        }
+      },
+      "anomalies": [],
+      "notes": ""
+    }
+  ],
+  "aggregations": {
+    "billable_total": 14112.130000000001,
+    "non_billable_total": 3.0,
+    "nga_total": 0,
+    "ramp_up_total": 0,
+    "ramp_down_total": 0
+  }
+}

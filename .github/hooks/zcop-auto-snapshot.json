@@ -1,0 +1,16 @@
+{
+  "name": "zcop-auto-snapshot",
+  "description": "Automatically update ZCOP metrics file after agent analysis",
+  "triggers": {
+    "PostToolUse": {
+      "condition": "tool == 'execute' && stdout contains 'parse_zcop'",
+      "actions": [
+        {
+          "type": "autoFormat",
+          "command": "python .github/scripts/parse_zcop.py {{ZCOP_FILE}} --save-snapshot"
+        }
+      ]
+    }
+  },
+  "notes": "This hook intercepts the execute tool when parse_zcop.py is run and ensures the snapshot is automatically persisted to the metrics tracking file."
+}

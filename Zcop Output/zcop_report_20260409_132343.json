@@ -1,0 +1,203 @@
+{
+  "generated": "2026-04-09T13:23:43.456301",
+  "period_days": 100,
+  "aggregate_stats": {
+    "period_days": 100,
+    "snapshots_count": 5,
+    "billable_total_hours": 6066.17,
+    "non_billable_total_hours": 1.0,
+    "billable_percentage": 99.98,
+    "nga_total_count": 0,
+    "rds_total_count": 0,
+    "date_range": "2026-01-28 to 2026-02-05"
+  },
+  "daily_trends": [
+    {
+      "date": "2026-01-28",
+      "file": "TD Bank ZCOP 28-Jan-2026.xlsx",
+      "billable": {
+        "value": 2100.39,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 1.0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "rds": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-01-29",
+      "file": "TD Bank ZCOP 29-Jan-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": -2100.39,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": -1.0,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "rds": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    },
+    {
+      "date": "2026-02-03",
+      "file": "TD Bank ZCOP 3-Feb-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "rds": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    },
+    {
+      "date": "2026-02-04",
+      "file": "TD Bank ZCOP 4-Feb-2026.xlsx",
+      "billable": {
+        "value": 1885.39,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "rds": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-02-05",
+      "file": "TD Bank ZCOP 5-Feb-2026.xlsx",
+      "billable": {
+        "value": 2080.3900000000003,
+        "change": 195.00000000000023,
+        "change_pct": 10.34,
+        "direction": "up"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "rds": 0,
+      "anomalies": []
+    }
+  ],
+  "dimension_analysis": {
+    "top_dms": {
+      "ABHISHEK AICH": {
+        "count": 10,
+        "billable_hours": 0,
+        "appearances": 2
+      },
+      "ABHISHEK AICH Total": {
+        "count": 2,
+        "billable_hours": 0,
+        "appearances": 2
+      },
+      "AMIT GOYAL": {
+        "count": 8,
+        "billable_hours": 0,
+        "appearances": 2
+      },
+      "AMIT GOYAL Total": {
+        "count": 2,
+        "billable_hours": 0,
+        "appearances": 2
+      },
+      "Amol Mulay": {
+        "count": 8,
+        "billable_hours": 0,
+        "appearances": 2
+      }
+    },
+    "top_business_lines": {
+      "Business Process Services": {
+        "count": 47,
+        "billable_hours": 47.0,
+        "appearances": 3
+      },
+      "Technology Services": {
+        "count": 5572,
+        "billable_hours": 5530.0,
+        "appearances": 3
+      },
+      "WIPRO CONSULTING": {
+        "count": 444,
+        "billable_hours": 437.1700000000001,
+        "appearances": 3
+      },
+      "Wipro Engineering": {
+        "count": 51,
+        "billable_hours": 50.0,
+        "appearances": 3
+      },
+      "OTHERS": {
+        "count": 2,
+        "billable_hours": 2.0,
+        "appearances": 2
+      }
+    },
+    "top_client_vps": {
+      "TD BANK": {
+        "count": 6116,
+        "billable_hours": 6066.17,
+        "appearances": 3
+      }
+    }
+  }
+}

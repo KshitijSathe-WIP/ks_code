@@ -1,0 +1,363 @@
+{
+  "generated": "2026-04-09T15:07:37.771892",
+  "period_days": 100,
+  "aggregate_stats": {
+    "period_days": 100,
+    "snapshots_count": 11,
+    "billable_total_hours": 14112.130000000001,
+    "non_billable_total_hours": 3.0,
+    "billable_percentage": 99.98,
+    "nga_total_count": 0,
+    "ramp_up_total": 0,
+    "ramp_down_total": 0,
+    "date_range": "2026-01-28 to 2026-04-08"
+  },
+  "daily_trends": [
+    {
+      "date": "2026-01-28",
+      "file": "TD Bank ZCOP 28-Jan-2026.xlsx",
+      "billable": {
+        "value": 2100.39,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 1.0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-01-29",
+      "file": "TD Bank ZCOP 29-Jan-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": -2100.39,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": -1.0,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    },
+    {
+      "date": "2026-02-03",
+      "file": "TD Bank ZCOP 3-Feb-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    },
+    {
+      "date": "2026-02-04",
+      "file": "TD Bank ZCOP 4-Feb-2026.xlsx",
+      "billable": {
+        "value": 1885.39,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-02-05",
+      "file": "TD Bank ZCOP 5-Feb-2026.xlsx",
+      "billable": {
+        "value": 2080.3900000000003,
+        "change": 195.00000000000023,
+        "change_pct": 10.34,
+        "direction": "up"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-03-31",
+      "file": "TD Bank ZCOP 31-Mar-2026.xlsx",
+      "billable": {
+        "value": 2027.49,
+        "change": -52.90000000000032,
+        "change_pct": -2.54,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-04-02",
+      "file": "TD Bank ZCOP 02-Apr-2026.xlsx",
+      "billable": {
+        "value": 2008.49,
+        "change": -19.0,
+        "change_pct": -0.94,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-04-03",
+      "file": "TD Bank ZCOP 03-Apr-2026.xlsx",
+      "billable": {
+        "value": 2006.49,
+        "change": -2.0,
+        "change_pct": -0.1,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 1.0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-04-06",
+      "file": "TD Bank ZCOP 06-Apr-2026.xlsx",
+      "billable": {
+        "value": 2003.49,
+        "change": -3.0,
+        "change_pct": -0.15,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 1.0,
+        "change": 0.0,
+        "change_pct": 0.0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": []
+    },
+    {
+      "date": "2026-04-07",
+      "file": "TD Bank ZCOP 07-Apr-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": -2003.49,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": -1.0,
+        "change_pct": -100.0,
+        "direction": "down"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    },
+    {
+      "date": "2026-04-08",
+      "file": "TD Bank ZCOP 08-Apr-2026.xlsx",
+      "billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "non_billable": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "nga": {
+        "value": 0,
+        "change": 0,
+        "change_pct": 0,
+        "direction": "stable"
+      },
+      "ramp_up": 0,
+      "ramp_down": 0,
+      "anomalies": [
+        "No billable or non-billable hours found"
+      ]
+    }
+  ],
+  "dimension_analysis": {
+    "top_dms": {
+      "ABHISHEK AICH": {
+        "count": 20,
+        "billable_hours": 0,
+        "appearances": 4
+      },
+      "ABHISHEK AICH Total": {
+        "count": 4,
+        "billable_hours": 0,
+        "appearances": 4
+      },
+      "AMIT GOYAL": {
+        "count": 16,
+        "billable_hours": 0,
+        "appearances": 4
+      },
+      "AMIT GOYAL Total": {
+        "count": 4,
+        "billable_hours": 0,
+        "appearances": 4
+      },
+      "Amol Mulay": {
+        "count": 18,
+        "billable_hours": 0,
+        "appearances": 4
+      }
+    },
+    "top_business_lines": {
+      "Business Process Services": {
+        "count": 111,
+        "billable_hours": 111.0,
+        "appearances": 7
+      },
+      "Technology Services": {
+        "count": 12997,
+        "billable_hours": 12848.0,
+        "appearances": 7
+      },
+      "WIPRO CONSULTING": {
+        "count": 1027,
+        "billable_hours": 1010.1300000000001,
+        "appearances": 7
+      },
+      "Wipro Engineering": {
+        "count": 143,
+        "billable_hours": 141.0,
+        "appearances": 7
+      },
+      "OTHERS": {
+        "count": 2,
+        "billable_hours": 2.0,
+        "appearances": 2
+      }
+    },
+    "top_client_vps": {
+      "TD BANK": {
+        "count": 14280,
+        "billable_hours": 14112.13,
+        "appearances": 7
+      }
+    }
+  }
+}
