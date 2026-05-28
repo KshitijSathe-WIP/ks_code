@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd 'c:\\\\Data_KS\\\\OneDrive - Wipro\\\\Project Data\\\\KS_Code' ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 28-Jan-2026\\.xlsx' --save-snapshot$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd 'c:\\\\Data_KS\\\\OneDrive - Wipro\\\\Project Data\\\\KS_Code' ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 28-Jan-2026\\.xlsx' --save-snapshot ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 29-Jan-2026\\.xlsx' --save-snapshot ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 3-Feb-2026\\.xlsx' --save-snapshot ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 4-Feb-2026\\.xlsx' --save-snapshot ; python \\.\\\\\\.github\\\\scripts\\\\parse_zcop\\.py '\\.\\\\Zcop Analysis\\\\TD Bank ZCOP 5-Feb-2026\\.xlsx' --save-snapshot$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

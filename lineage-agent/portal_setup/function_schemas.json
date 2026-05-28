@@ -1,0 +1,153 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "query_upstream_lineage",
+      "description": "Retrieves upstream (source) lineage for a given table. Finds all tables whose fields transform into any field of the target table. Results show each upstream table with its layer, schema, and hop distance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "The exact name of the target table. Example: \"F_ACCOUNT_CONS\""
+          },
+          "max_depth": {
+            "type": "string",
+            "description": "Maximum number of hops to traverse upstream. Default is \"10\". Use \"1\" for direct sources only."
+          }
+        },
+        "required": [
+          "table_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "query_downstream_lineage",
+      "description": "Retrieves downstream (dependent) lineage for a given table. Finds all tables whose fields receive transformations from any field of the source table. Useful for impact analysis — understanding what breaks if this table changes.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "The exact name of the source table to trace downstream. Example: \"MAST_LOAN_REC\""
+          },
+          "max_depth": {
+            "type": "string",
+            "description": "Maximum number of hops to traverse downstream. Default is \"10\". Use \"1\" for direct dependents only."
+          }
+        },
+        "required": [
+          "table_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "query_column_lineage",
+      "description": "Retrieves field-level lineage showing where a specific field derives from. Traces TRANSFORMS_TO backwards to find all source fields with transformation details.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "description": "The exact name of the field/column to trace. Example: \"DDM_SOURCE_CD\""
+          },
+          "table_name": {
+            "type": "string",
+            "description": "The table containing this field. Example: \"D_LOAN_ACCOUNT_CONS\""
+          }
+        },
+        "required": [
+          "field_name",
+          "table_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "query_cross_layer_path",
+      "description": "Finds the shortest lineage path between two tables across layers. Useful for tracing the full pipeline from a TPR source to a DDM target (e.g., TPR → TT → DDM).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source_table": {
+            "type": "string",
+            "description": "The starting table (typically TPR layer). Example: \"MAST_LOAN_REC\""
+          },
+          "target_table": {
+            "type": "string",
+            "description": "The ending table (typically DDM layer). Example: \"D_LOAN_ACCOUNT_CONS\""
+          }
+        },
+        "required": [
+          "source_table",
+          "target_table"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "query_impact_analysis",
+      "description": "Performs impact analysis for a given table — calculates the blast radius. Shows all downstream tables grouped by layer, with counts per layer. Useful for understanding the risk of changing or removing a table.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "The table to analyze impact for. Example: \"TT_D_PARTICIPANT\""
+          }
+        },
+        "required": [
+          "table_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "query_tables_by_layer",
+      "description": "Lists all tables belonging to a specific data layer with field counts. Valid layers: TPR (source system), TT (temp/staging), DDM (data mart).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "layer_name": {
+            "type": "string",
+            "description": "The layer to query. Example: \"DDM\""
+          }
+        },
+        "required": [
+          "layer_name"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_custom_cypher",
+      "description": "Executes a custom read-only Cypher query against the lineage graph. Use this ONLY when the other lineage functions cannot answer the question. Only MATCH and RETURN queries are allowed. CREATE, DELETE, SET, MERGE, DROP, and REMOVE operations are blocked.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cypher_query": {
+            "type": "string",
+            "description": "A valid read-only Cypher query. Example: \"MATCH (f:Field {layer:'DDM'}) RETURN DISTINCT f.table_name LIMIT 10\""
+          }
+        },
+        "required": [
+          "cypher_query"
+        ]
+      }
+    }
+  }
+]
