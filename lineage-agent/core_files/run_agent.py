@@ -11,6 +11,8 @@ import sys
 import json
 import inspect
 import re
+import threading
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -208,41 +210,120 @@ def preflight_checks():
 # CONVERSATION LOOP WITH TOOL CALLING
 # ────────────────────────────────────────────────────────────
 
+def _thinking_ticker(stop_event, label="Thinking"):
+    """
+    Background thread: prints an elapsed-time counter to stderr every second.
+    Clears itself when stop_event is set.
+    """
+    start = time.time()
+    while not stop_event.is_set():
+        elapsed = int(time.time() - start)
+        # \r returns to start of line; the spaces overwrite previous content
+        sys.stderr.write(f"\r⏳ {label}… {elapsed}s   ")
+        sys.stderr.flush()
+        stop_event.wait(1.0)
+    # Clear the ticker line when done
+    sys.stderr.write("\r" + " " * 30 + "\r")
+    sys.stderr.flush()
+
+
 def chat(messages):
     """
-    Send messages to the model. If the model requests tool calls,
-    execute them and continue until a final text response is produced.
+    Send messages to the model with streaming. Tokens are printed to the
+    terminal as they arrive. If the model requests tool calls, execute them
+    and continue until a final text response is produced.
+    Returns the full assembled response text.
     """
-    while True:
-        response = client.chat.completions.create(
+    max_rounds = 10
+    for round_num in range(max_rounds):
+        # Show live elapsed-time ticker while waiting for the model
+        stop_ticker = threading.Event()
+        ticker = threading.Thread(
+            target=_thinking_ticker,
+            args=(stop_ticker, "Model thinking"),
+            daemon=True,
+        )
+        ticker.start()
+
+        stream = client.chat.completions.create(
             model=MODEL,
             messages=messages,
             tools=TOOLS,
             tool_choice="auto",
+            stream=True,
+            max_completion_tokens=8000,
         )
 
-        choice = response.choices[0]
-        msg = choice.message
+        # Accumulate streamed response
+        full_text = ""
+        tool_calls_acc = {}   # index -> {id, name, arguments}
+        finish_reason = None
+        first_chunk = True
 
-        # Append assistant message to conversation
-        messages.append(msg.model_dump())
+        for chunk in stream:
+            if first_chunk:
+                # First chunk received — stop the ticker
+                stop_ticker.set()
+                ticker.join()
+                first_chunk = False
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            finish_reason = chunk.choices[0].finish_reason or finish_reason
+            # Stream text tokens directly to terminal
+            if delta.content:
+                print(delta.content, end="", flush=True)
+                full_text += delta.content
 
-        # If no tool calls, we have the final answer
-        if not msg.tool_calls:
-            return msg.content
+            # Accumulate tool call deltas
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_acc:
+                        tool_calls_acc[idx] = {"id": tc.id or "", "name": "", "arguments": ""}
+                    if tc.id:
+                        tool_calls_acc[idx]["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls_acc[idx]["name"] += tc.function.name
+                        if tc.function.arguments:
+                            tool_calls_acc[idx]["arguments"] += tc.function.arguments
 
-        # Handle tool calls
+        # If no tool calls, the streamed text is the final answer
+        if not tool_calls_acc:
+            print()  # newline after streamed output
+            messages.append({"role": "assistant", "content": full_text or "(No response generated)"})
+            return full_text or "(No response generated)"
+
+        # Build assistant message with tool_calls for conversation history
+        tool_calls_list = []
+        for idx in sorted(tool_calls_acc):
+            tc = tool_calls_acc[idx]
+            tool_calls_list.append({
+                "id": tc["id"],
+                "type": "function",
+                "function": {"name": tc["name"], "arguments": tc["arguments"]},
+            })
+        messages.append({
+            "role": "assistant",
+            "content": full_text or None,
+            "tool_calls": tool_calls_list,
+        })
+
+        # Execute tool calls
         print(f"\n{'─'*50}")
-        print(f"🔧 Agent requesting {len(msg.tool_calls)} tool call(s):")
+        print(f"🔧 Agent requesting {len(tool_calls_list)} tool call(s):")
 
-        for tool_call in msg.tool_calls:
-            func_name = tool_call.function.name
-            func_args = json.loads(tool_call.function.arguments)
+        for tc in tool_calls_list:
+            func_name = tc["function"]["name"]
+            try:
+                func_args = json.loads(tc["function"]["arguments"])
+            except json.JSONDecodeError:
+                func_args = {}
 
             print(f"\n   📌 Function: {func_name}")
             print(f"   📌 Args:     {json.dumps(func_args, indent=2)}")
 
-            # Execute the function
             if func_name in FUNCTION_REGISTRY:
                 try:
                     result = FUNCTION_REGISTRY[func_name](**func_args)
@@ -254,14 +335,16 @@ def chat(messages):
                 result = json.dumps({"error": f"Unknown function: {func_name}"})
                 print(f"   ⚠️ Unknown function: {func_name}")
 
-            # Add tool result to conversation
             messages.append({
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tc["id"],
                 "content": result,
             })
 
         print(f"{'─'*50}\n")
+        print("\n🤖 Agent:\n", end="", flush=True)  # print header before next stream
+
+    return "(Max rounds reached)"
 
 
 # ────────────────────────────────────────────────────────────
@@ -305,8 +388,8 @@ def main():
         messages.append({"role": "user", "content": user_input})
 
         try:
-            response = chat(messages)
-            print(f"\n🤖 Agent:\n{response}")
+            print("\n🤖 Agent:\n", end="", flush=True)
+            chat(messages)
         except Exception as e:
             print(f"\n❌ Error: {e}")
             # Remove failed user message so conversation stays consistent

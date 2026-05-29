@@ -1,3 +1,4 @@
+== CLI Mode (command line chat) ==
 cd "C:\Data_KS\OneDrive - Wipro\Project Data\KS_Code\lineage-agent"
 .venv\Scripts\activate
 cd core_files
@@ -6,3 +7,12 @@ python run_agent.py
 
 cd "C:\Data_KS\OneDrive - Wipro\Project Data\KS_Code\lineage-agent\core_files"
 ..\.venv\Scripts\python.exe run_agent.py
+
+== Web Mode (browser UI at http://localhost:5000) ==
+cd "C:\Data_KS\OneDrive - Wipro\Project Data\KS_Code\lineage-agent"
+.venv\Scripts\activate
+set PYTHONIOENCODING=utf-8
+python web_app.py
+
+cd "C:\Data_KS\OneDrive - Wipro\Project Data\KS_Code\lineage-agent"
+.venv\Scripts\python.exe web_app.py

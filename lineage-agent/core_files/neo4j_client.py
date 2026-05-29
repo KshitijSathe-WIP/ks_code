@@ -7,9 +7,19 @@
 
 import os
 import json
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
+
+# Suppress the Neo4j driver's internal connection-retry noise.
+# These INFO-level messages (e.g. "Failed to read from defunct connection…
+# Transaction failed and will be retried in Xs") are expected transient
+# events handled automatically by the driver — not errors the caller
+# needs to see. Genuine failures still surface as exceptions.
+logging.getLogger("neo4j").setLevel(logging.WARNING)
+logging.getLogger("neo4j.io").setLevel(logging.WARNING)
+logging.getLogger("neo4j.pool").setLevel(logging.WARNING)
 
 # Load environment variables from .env file (project root)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -58,9 +68,17 @@ class Neo4jLineageClient:
         self.driver = GraphDatabase.driver(
             uri_for_driver,
             auth=(self.username, self.password),
-            max_connection_lifetime=3600,      # Recycle connections every hour
+            max_connection_lifetime=300,        # Recycle connections every 5 min
+                                                # (Aura/proxies often close idle
+                                                #  connections after ~30-60s)
             max_connection_pool_size=50,        # Max 50 concurrent connections
-            connection_acquisition_timeout=60   # Wait up to 60s for a connection
+            connection_acquisition_timeout=60,  # Wait up to 60s for a connection
+            keep_alive=True,                    # Enable TCP keepalive probes so
+                                                # idle connections aren't silently
+                                                # dropped by network proxies
+            liveness_check_timeout=0,           # Check connection liveness before
+                                                # every use (0 = always check);
+                                                # prevents "defunct connection" errors
         )
 
         # ─── Step 3: Verify connectivity immediately ───

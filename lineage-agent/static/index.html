@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lineage Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-chat: #0f3460;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --text-primary: #eaeaea;
+            --text-secondary: #a0a0b0;
+            --user-bubble: #533483;
+            --agent-bubble: #1e3a5f;
+            --tool-bg: #0d2137;
+            --border: #2a2a4a;
+            --success: #4caf50;
+            --error: #f44336;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-icon {
+            font-size: 24px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .header .subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            background: var(--bg-chat);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .btn-accent:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Status bar */
+        .status-bar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 6px 24px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .status-dot.error {
+            background: var(--error);
+        }
+
+        .status-dot.loading {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Chat area */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
+
+        .message.agent {
+            align-self: flex-start;
+        }
+
+        .message-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            padding: 0 8px;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: var(--user-bubble);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.agent .message-bubble {
+            background: var(--agent-bubble);
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Tool calls display */
+        .tool-calls {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: var(--tool-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        .tool-calls summary {
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
+
+        .tool-call-item {
+            margin-top: 6px;
+            padding: 6px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 4px;
+        }
+
+        .tool-call-name {
+            color: var(--accent);
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+        }
+
+        .tool-call-status {
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        .tool-call-status.success { color: var(--success); }
+        .tool-call-status.error { color: var(--error); }
+
+        /* Typing indicator */
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            padding: 12px 16px;
+            background: var(--agent-bubble);
+            border-radius: 12px;
+            border-bottom-left-radius: 4px;
+        }
+
+        .typing-indicator.visible {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+
+        /* Input area */
+        .input-area {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            padding: 16px 24px;
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .input-wrapper textarea {
+            flex: 1;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            line-height: 1.4;
+        }
+
+        .input-wrapper textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .input-wrapper textarea::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .send-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Welcome screen */
+        .welcome {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .welcome h2 {
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            font-size: 22px;
+        }
+
+        .welcome p {
+            max-width: 500px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            max-width: 700px;
+            width: 100%;
+        }
+
+        .example-card {
+            background: var(--bg-chat);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .example-card:hover {
+            border-color: var(--accent);
+            background: rgba(233, 69, 96, 0.1);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Markdown-like formatting in responses */
+        .message-bubble code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+        }
+
+        .message-bubble pre {
+            background: rgba(0,0,0,0.3);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .message-bubble pre code {
+            background: none;
+            padding: 0;
+        }
+
+        /* Tables */
+        .message-bubble table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+
+        .message-bubble th,
+        .message-bubble td {
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-bubble th {
+            background: rgba(233, 69, 96, 0.15);
+            font-weight: 600;
+            color: var(--accent-hover);
+        }
+
+        .message-bubble tr:nth-child(even) {
+            background: rgba(255,255,255,0.03);
+        }
+
+        .message-bubble tr:hover {
+            background: rgba(255,255,255,0.06);
+        }
+
+        /* Mermaid diagrams */
+        .message-bubble .mermaid {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .message-bubble .mermaid svg {
+            max-width: 100%;
+        }
+
+        /* Lists */
+        .message-bubble ul, .message-bubble ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        .message-bubble li {
+            margin: 4px 0;
+        }
+
+        .message-bubble h3, .message-bubble h4 {
+            margin: 12px 0 6px 0;
+            color: var(--accent-hover);
+        }
+
+        .streaming-cursor {
+            animation: blink 0.7s infinite;
+            color: var(--accent);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <span class="header-icon">🧬</span>
+            <div>
+                <h1>Lineage Agent</h1>
+                <span class="subtitle">Cross-Layer Data Lineage Assistant</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="newSession()">New Chat</button>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-item">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+        <div class="status-item" id="modelInfo"></div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome" id="welcome">
+            <h2>Cross-Layer Data Lineage Assistant</h2>
+            <p>Ask questions about data lineage across TPR, TT, and DDM layers. I can trace upstream/downstream dependencies, show column transformations, and perform impact analysis.</p>
+            <div class="examples">
+                <div class="example-card" onclick="sendExample(this)">Show all tables in the DDM layer</div>
+                <div class="example-card" onclick="sendExample(this)">What is the upstream lineage of F_PARTICIPANTS?</div>
+                <div class="example-card" onclick="sendExample(this)">Trace CUSTOMER_KEY from TPR to DDM</div>
+                <div class="example-card" onclick="sendExample(this)">Impact analysis for TPR table SHAW_CUSTOMER</div>
+            </div>
+        </div>
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-wrapper">
+            <textarea id="messageInput" placeholder="Ask about data lineage..." rows="1"
+                      onkeydown="handleKeyDown(event)" oninput="autoResize(this)"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let isProcessing = false;
+
+        // ─── Heartbeat (keeps server alive while browser is open) ───
+        setInterval(() => {
+            fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+        }, 5000);
+
+        // ─── Shutdown on tab/window close ───
+        window.addEventListener('beforeunload', () => {
+            navigator.sendBeacon('/api/shutdown');
+        });
+
+        // ─── Initialize ───
+        document.addEventListener('DOMContentLoaded', () => {
+            // Configure marked.js
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+            });
+            // Configure Mermaid
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'dark',
+                themeVariables: {
+                    primaryColor: '#533483',
+                    primaryTextColor: '#eaeaea',
+                    primaryBorderColor: '#e94560',
+                    lineColor: '#a0a0b0',
+                    secondaryColor: '#1e3a5f',
+                    tertiaryColor: '#0f3460',
+                }
+            });
+            checkHealth();
+            document.getElementById('messageInput').focus();
+        });
+
+        // ─── Health Check ───
+        async function checkHealth() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                const model = document.getElementById('modelInfo');
+
+                if (data.status === 'ok') {
+                    dot.className = 'status-dot';
+                    text.textContent = data.tools_loaded ? 'Connected' : 'Connected (tools unavailable)';
+                    model.textContent = `Model: ${data.model}`;
+                } else {
+                    dot.className = 'status-dot error';
+                    text.textContent = 'Disconnected';
+                }
+            } catch {
+                document.getElementById('statusDot').className = 'status-dot error';
+                document.getElementById('statusText').textContent = 'Server unreachable';
+            }
+        }
+
+        // ─── Send Message (Streaming) ───
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message || isProcessing) return;
+
+            // Hide welcome
+            const welcome = document.getElementById('welcome');
+            if (welcome) welcome.style.display = 'none';
+
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+            autoResize(input);
+
+            // Show typing indicator
+            setProcessing(true);
+
+            // Create agent message bubble for streaming
+            const { bubble, msgDiv } = createAgentBubble();
+            let fullText = '';
+            let toolCalls = [];
+
+            try {
+                const res = await fetch('/api/chat/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, session_id: sessionId }),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    bubble.innerHTML = formatResponse(`Error: ${err.error || 'Unknown error'}`);
+                    setProcessing(false);
+                    return;
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.startsWith(':')) continue; // SSE comment (keepalive)
+                        if (!line.startsWith('data: ')) continue;
+                        const payload = JSON.parse(line.slice(6));
+
+                        switch (payload.type) {
+                            case 'session':
+                                sessionId = payload.session_id;
+                                break;
+                            case 'thinking':
+                                // Show a status while the model decides on tool calls
+                                if (!fullText) {
+                                    bubble.innerHTML = '<span class="streaming-cursor">▌</span>';
+                                }
+                                break;
+                            case 'tools':
+                                toolCalls = payload.tool_calls;
+                                // Show which tool was called while waiting for the next round
+                                if (!fullText && toolCalls.length > 0) {
+                                    const names = toolCalls.map(t => t.function).join(', ');
+                                    bubble.innerHTML = `<span style="color:var(--text-secondary);font-size:12px">🔧 Running ${names}…</span><span class="streaming-cursor"> ▌</span>`;
+                                }
+                                break;
+                            case 'token':
+                                fullText += payload.token;
+                                bubble._streaming_done = true;
+                                clearInterval(bubble._timer);
+                                bubble.innerHTML = formatResponse(fullText);
+                                scrollToBottom();
+                                break;
+                            case 'error':
+                                fullText = `Error: ${payload.error}`;
+                                bubble.innerHTML = formatResponse(fullText);
+                                break;
+                            case 'done':
+                                break;
+                        }
+                    }
+                }
+
+                // Final render with mermaid
+                bubble.innerHTML = formatResponse(fullText);
+                renderMermaidInElement(bubble);
+
+                // Add tool calls details if any
+                if (toolCalls.length > 0) {
+                    appendToolCalls(msgDiv, toolCalls);
+                }
+
+            } catch (err) {
+                bubble.innerHTML = formatResponse(`Connection error: ${err.message}`);
+            }
+
+            setProcessing(false);
+            scrollToBottom();
+        }
+
+        // ─── Create streaming agent bubble ───
+        function createAgentBubble() {
+            const container = document.getElementById('chatContainer');
+            const indicator = document.getElementById('typingIndicator');
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message agent';
+
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = 'Agent';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+
+            // Show elapsed time while waiting
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                elapsed++;
+                if (!bubble._streaming_done) {
+                    bubble.innerHTML = `<span style="color:var(--text-secondary);font-size:12px">Thinking… ${elapsed}s</span><span class="streaming-cursor"> ▌</span>`;
+                }
+            }, 1000);
+            bubble._timer = timer;
+            bubble.innerHTML = '<span class="streaming-cursor">▌</span>';
+
+            msgDiv.appendChild(label);
+            msgDiv.appendChild(bubble);
+            container.insertBefore(msgDiv, indicator);
+            scrollToBottom();
+
+            return { bubble, msgDiv };
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendToolCalls(msgDiv, toolCalls) {
+            const details = document.createElement('details');
+            details.className = 'tool-calls';
+            const summary = document.createElement('summary');
+            summary.textContent = `${toolCalls.length} tool call(s) executed`;
+            details.appendChild(summary);
+
+            toolCalls.forEach(tc => {
+                const item = document.createElement('div');
+                item.className = 'tool-call-item';
+                item.innerHTML = `
+                    <span class="tool-call-name">${escapeHtml(tc.function)}</span>
+                    <span class="tool-call-status ${tc.status}">${tc.status === 'success' ? '✓' : '✗'}</span>
+                    <div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">
+                        ${escapeHtml(JSON.stringify(tc.args))}
+                    </div>
+                `;
+                details.appendChild(item);
+            });
+
+            msgDiv.appendChild(details);
+        }
+
+        // ─── Add Message to Chat ───
+        function addMessage(text, role, toolCalls) {
+            const container = document.getElementById('chatContainer');
+            const indicator = document.getElementById('typingIndicator');
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = role === 'user' ? 'You' : 'Agent';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = formatResponse(text || '');
+
+            msgDiv.appendChild(label);
+            msgDiv.appendChild(bubble);
+
+            // Tool calls details
+            if (toolCalls && toolCalls.length > 0) {
+                const details = document.createElement('details');
+                details.className = 'tool-calls';
+                const summary = document.createElement('summary');
+                summary.textContent = `${toolCalls.length} tool call(s) executed`;
+                details.appendChild(summary);
+
+                toolCalls.forEach(tc => {
+                    const item = document.createElement('div');
+                    item.className = 'tool-call-item';
+                    item.innerHTML = `
+                        <span class="tool-call-name">${escapeHtml(tc.function)}</span>
+                        <span class="tool-call-status ${tc.status}">${tc.status === 'success' ? '✓' : '✗'}</span>
+                        <div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">
+                            ${escapeHtml(JSON.stringify(tc.args))}
+                        </div>
+                    `;
+                    details.appendChild(item);
+                });
+
+                msgDiv.appendChild(details);
+            }
+
+            container.insertBefore(msgDiv, indicator);
+            // Render any Mermaid diagrams in the new message
+            if (role === 'agent') {
+                renderMermaidInElement(bubble);
+            }
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ─── Format Response (marked.js + Mermaid) ───
+        function formatResponse(text) {
+            // Use marked.js for full Markdown rendering (tables, lists, code, bold, etc.)
+            return marked.parse(text || '');
+        }
+
+        function renderMermaidInElement(el) {
+            // Find all code blocks with class 'language-mermaid' and render them
+            const mermaidBlocks = el.querySelectorAll('code.language-mermaid');
+            mermaidBlocks.forEach((block, idx) => {
+                const pre = block.parentElement;
+                const mermaidDiv = document.createElement('div');
+                mermaidDiv.className = 'mermaid';
+                mermaidDiv.textContent = block.textContent;
+                pre.replaceWith(mermaidDiv);
+            });
+            // Run mermaid on new elements, catch syntax errors gracefully
+            const nodes = el.querySelectorAll('.mermaid');
+            if (nodes.length > 0) {
+                try {
+                    mermaid.run({ nodes: nodes });
+                } catch (e) {
+                    console.warn('Mermaid render error:', e);
+                    // Show raw diagram code on failure
+                    nodes.forEach(n => {
+                        n.style.whiteSpace = 'pre-wrap';
+                        n.style.fontFamily = 'monospace';
+                        n.style.fontSize = '12px';
+                        n.style.color = 'var(--text-secondary)';
+                    });
+                }
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ─── UI Helpers ───
+        function setProcessing(processing) {
+            isProcessing = processing;
+            document.getElementById('sendBtn').disabled = processing;
+            document.getElementById('typingIndicator').className =
+                'typing-indicator' + (processing ? ' visible' : '');
+            if (processing) {
+                const container = document.getElementById('chatContainer');
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function handleKeyDown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        }
+
+        function sendExample(el) {
+            document.getElementById('messageInput').value = el.textContent;
+            sendMessage();
+        }
+
+        async function newSession() {
+            try {
+                const res = await fetch('/api/new_session', { method: 'POST' });
+                const data = await res.json();
+                sessionId = data.session_id;
+            } catch {
+                sessionId = null;
+            }
+
+            // Clear chat
+            const container = document.getElementById('chatContainer');
+            const messages = container.querySelectorAll('.message');
+            messages.forEach(m => m.remove());
+
+            // Show welcome
+            const welcome = document.getElementById('welcome');
+            if (welcome) welcome.style.display = '';
+        }
+    </script>
+</body>
+</html>
