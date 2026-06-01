@@ -130,6 +130,14 @@ def init_tools():
 # ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are a Cross-Layer Data Lineage Assistant for a banking data warehouse.
+Your ONLY purpose is to answer questions about data lineage, field transformations, table relationships, and data flows within the Neo4j lineage graph.
+
+STRICT SCOPE RULE:
+- You MUST refuse any request that is not directly related to the lineage data in Neo4j.
+- This includes: general conversation, greetings beyond a one-line acknowledgement, jokes, opinions, coding help, explanations of unrelated concepts, or any topic outside data lineage.
+- If asked anything out of scope, respond with exactly: "I'm a data lineage assistant. I can only answer questions about tables, fields, and data flows in the lineage graph. Please ask a lineage question."
+- Do not apologise at length, do not suggest alternatives, do not engage further.
+
 You help users trace data flows across three layers:
 - TPR (source/transactional systems)
 - TT (staging/transformation layer)
@@ -139,13 +147,21 @@ The lineage graph has Field nodes connected by TRANSFORMS_TO relationships.
 Field properties: id, db_schema, table_name, field_name, layer, data_type, precision.
 Relationship properties: mapping_name, folder_name, transformation_name, transformation_type, expression.
 
+STRICT DATA RULES — non-negotiable:
+- You MUST call a tool and use its response as the SOLE basis for every answer.
+- NEVER invent, infer, assume, or guess any table name, field name, layer, expression, mapping, or relationship.
+- If the tool returns zero results, say exactly: "No results found in the graph for [input]." — nothing more.
+- Do NOT add context, background, business explanations, or commentary beyond what the tool returned.
+- Do NOT suggest what the data "might" mean or "probably" represents.
+- Every value in your response must be traceable to a field in the tool's JSON output.
+
 When answering:
-1. Use the provided tools to query the Neo4j lineage graph
-2. Present tabular results using **Markdown tables** (with headers and alignment)
-3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks
+1. Call the appropriate tool — ALWAYS. Never answer from memory.
+2. Present the tool's results verbatim in **Markdown tables** (with headers and alignment)
+3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks — nodes and edges must reflect only what the tool returned
 4. For impact analysis, show a Mermaid diagram of the blast radius plus a summary table
 5. For column lineage, show both a Mermaid transformation chain AND a table with expressions
-6. If a table/field is not found, suggest similar names or ask the user to clarify
+6. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
 
 Formatting rules:
 - Always use Markdown tables (| col1 | col2 |) when showing lists of tables, fields, or properties
@@ -153,15 +169,16 @@ Formatting rules:
 - Use Mermaid graph TD (top-down) for lineage flows, e.g.:
   ```mermaid
   graph TD
-    A["TPR: SOURCE_TABLE.FIELD"] -->|expression| B["TT: STAGING_TABLE.FIELD"]
-    B -->|expression| C["DDM: MART_TABLE.FIELD"]
+    A["TPR: SOURCE_TABLE.FIELD"] --> B["TT: STAGING_TABLE.FIELD"]
+    B --> C["DDM: MART_TABLE.FIELD"]
   ```
-- IMPORTANT Mermaid rules:
+- IMPORTANT Mermaid rules — follow these EXACTLY or the diagram will fail:
   - Always wrap node labels in double quotes: A["label"]
-  - Use colons not dots for layer separation: "TPR: TABLE.FIELD"
-  - Do NOT use parentheses () or brackets [] inside quoted labels
-  - Keep edge labels short, no special characters in edge labels
-  - Use simple single-letter or short node IDs: A, B, C, n1, n2
+  - Use simple alphanumeric node IDs only: A, B, C, n1, n2 — NEVER use dots, underscores, or field names as IDs
+  - Use colons not dots for layer prefix inside labels: "TPR: TABLE.FIELD" (dots inside quoted labels are fine)
+  - Do NOT put parentheses (), brackets [], pipes |, slashes /, or quotes inside quoted labels — strip them out
+  - Do NOT use edge labels (-->|text|) at all — bare arrows only: -->
+  - If you need to show transformation type, put it in the destination node label instead
 - Bold important field names and table names in text explanations
 """
 
@@ -200,6 +217,7 @@ def chat(messages):
                 "model": MODEL,
                 "messages": messages,
                 "max_completion_tokens": 8000,
+                "temperature": 0,
             }
             if TOOLS:  # only pass tools if they were loaded
                 kwargs["tools"] = TOOLS
@@ -369,6 +387,7 @@ def _agent_worker(messages, q):
                 "messages": messages,
                 "max_completion_tokens": 8000,
                 "stream": True,
+                "temperature": 0,
             }
             if TOOLS:
                 kwargs["tools"] = TOOLS
@@ -576,13 +595,54 @@ if __name__ == "__main__":
     print(f"Endpoint: {PROJECT_ENDPOINT}")
     print("─" * 60)
 
-    print("\n🔍 Initializing tools...")
+    # ── Preflight: Neo4j connectivity ──────────────────────
+    print("\n🔍 Running preflight checks...")
+    neo4j_ok = False
+    try:
+        from neo4j import GraphDatabase
+        uri = os.environ.get("NEO4J_URI", "")
+        username = os.environ.get("NEO4J_USERNAME", "")
+        password = os.environ.get("NEO4J_PASSWORD", "")
+        if not all([uri, username, password]):
+            print("   ❌ Neo4j — missing env vars (NEO4J_URI / NEO4J_USERNAME / NEO4J_PASSWORD)")
+        else:
+            uri_for_driver = uri.replace("neo4j+s://", "neo4j+ssc://", 1)
+            driver = GraphDatabase.driver(uri_for_driver, auth=(username, password))
+            driver.verify_connectivity()
+            driver.close()
+            print("   ✅ Neo4j — connected")
+            neo4j_ok = True
+    except Exception as e:
+        print(f"   ❌ Neo4j — {e}")
+
+    # ── Preflight: model endpoint ───────────────────────────
+    model_ok = False
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": "ping"}],
+            max_completion_tokens=5,
+        )
+        if resp.choices and resp.choices[0].message.content:
+            print(f"   ✅ Model ({MODEL}) — reachable")
+            model_ok = True
+        else:
+            print(f"   ❌ Model ({MODEL}) — empty response")
+    except Exception as e:
+        print(f"   ❌ Model ({MODEL}) — {e}")
+
+    if not (neo4j_ok and model_ok):
+        print("\n⛔ Preflight checks failed — fix the above issues and try again.")
+        sys.exit(1)
+
+    # ── Load tools ─────────────────────────────────────────
     if init_tools():
         print("   ✅ Tools loaded")
     else:
-        print("   ❌ Tools failed to load — agent will not have lineage functions")
+        print("\n⛔ Failed to load lineage tools — cannot start.")
+        sys.exit(1)
 
-    # Start heartbeat watchdog thread
+    # ── Start heartbeat watchdog ────────────────────────────
     watchdog = threading.Thread(target=_heartbeat_watchdog, daemon=True)
     watchdog.start()
 

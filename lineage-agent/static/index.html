@@ -836,9 +836,7 @@
             // Run mermaid on new elements, catch syntax errors gracefully
             const nodes = el.querySelectorAll('.mermaid');
             if (nodes.length > 0) {
-                try {
-                    mermaid.run({ nodes: nodes });
-                } catch (e) {
+                mermaid.run({ nodes: nodes }).catch(e => {
                     console.warn('Mermaid render error:', e);
                     // Show raw diagram code on failure
                     nodes.forEach(n => {
@@ -847,7 +845,7 @@
                         n.style.fontSize = '12px';
                         n.style.color = 'var(--text-secondary)';
                     });
-                }
+                });
             }
         }
 
