@@ -102,7 +102,7 @@ def _build_tool_schema(fn):
 
 
 def init_tools():
-    """Import lineage_tools and build function registry + tool schemas."""
+    """Import lineage_tools + cosmos_tools and build function registry + tool schemas."""
     global FUNCTION_REGISTRY, TOOLS, TOOLS_LOADED
     if TOOLS_LOADED:
         return True
@@ -115,14 +115,29 @@ def init_tools():
             "query_cross_layer_path":    m.query_cross_layer_path,
             "query_impact_analysis":     m.query_impact_analysis,
             "query_tables_by_layer":     m.query_tables_by_layer,
+            "search_fields":             m.search_fields,
             "run_custom_cypher":         m.run_custom_cypher,
         })
-        TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
-        TOOLS_LOADED = True
-        return True
     except Exception as e:
-        print(f"❌ Failed to load tools: {e}")
+        print(f"❌ Failed to load lineage_tools: {e}")
         return False
+
+    try:
+        import cosmos_tools as ct
+        FUNCTION_REGISTRY.update({
+            "get_edge_transformation_details"    : ct.get_edge_transformation_details,
+            "get_field_transformation_logic"     : ct.get_field_transformation_logic,
+            "get_mapping_transformation_details" : ct.get_mapping_transformation_details,
+            "get_lookup_details_for_table"        : ct.get_lookup_details_for_table,
+            "get_sql_and_filter_logic"           : ct.get_sql_and_filter_logic,
+        })
+        print("   ✅ Cosmos DB tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Cosmos tools unavailable (continuing without them): {e}")
+
+    TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
+    TOOLS_LOADED = True
+    return True
 
 
 # ────────────────────────────────────────────────────────────
@@ -130,10 +145,10 @@ def init_tools():
 # ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are a Cross-Layer Data Lineage Assistant for a banking data warehouse.
-Your ONLY purpose is to answer questions about data lineage, field transformations, table relationships, and data flows within the Neo4j lineage graph.
+Your ONLY purpose is to answer questions about data lineage, field transformations, table relationships, and data flows within the Neo4j lineage graph and the Cosmos DB transformation details store.
 
 STRICT SCOPE RULE:
-- You MUST refuse any request that is not directly related to the lineage data in Neo4j.
+- You MUST refuse any request that is not directly related to the lineage data in Neo4j or Cosmos DB.
 - This includes: general conversation, greetings beyond a one-line acknowledgement, jokes, opinions, coding help, explanations of unrelated concepts, or any topic outside data lineage.
 - If asked anything out of scope, respond with exactly: "I'm a data lineage assistant. I can only answer questions about tables, fields, and data flows in the lineage graph. Please ask a lineage question."
 - Do not apologise at length, do not suggest alternatives, do not engage further.
@@ -143,17 +158,148 @@ You help users trace data flows across three layers:
 - TT (staging/transformation layer)
 - DDM (data mart/reporting layer)
 
+DATA SOURCES:
+1. Neo4j graph — field nodes and TRANSFORMS_TO relationships (lineage topology)
+2. Cosmos DB — transformation_details container (full transformation logic per edge)
+
 The lineage graph has Field nodes connected by TRANSFORMS_TO relationships.
 Field properties: id, db_schema, table_name, field_name, layer, data_type, precision.
+The `id` property is in SCHEMA.TABLE.FIELD format (e.g. "CRDM_DDM.F_ACCOUNTS.SOURCE_KEY").
 Relationship properties: mapping_name, folder_name, transformation_name, transformation_type, expression.
+
+The Cosmos DB transformation_details container stores one document per lineage edge:
+- edge_id        : SCHEMA.TABLE.FIELD__to__SCHEMA.TABLE.FIELD__m_MAPPING
+- from_vertex    : source field id
+- to_vertex      : target field id
+- mapping_name   : Informatica mapping name
+- final_expression         : expression closest to the target
+- custom_sql               : Source Qualifier SQL (if any)
+- lookup_condition         : Lookup transformation condition (if any)
+- filter_condition         : Filter / SQ filter condition (if any)
+- update_strategy_expression : e.g. DD_UPDATE, DD_INSERT
+- transformation_chain[]   : ordered steps with per-step detail
 
 STRICT DATA RULES — non-negotiable:
 - You MUST call a tool and use its response as the SOLE basis for every answer.
 - NEVER invent, infer, assume, or guess any table name, field name, layer, expression, mapping, or relationship.
-- If the tool returns zero results, say exactly: "No results found in the graph for [input]." — nothing more.
+- If the tool returns zero results, IMMEDIATELY call search_fields to find the correct name — do NOT say "not found" without trying search_fields first.
 - Do NOT add context, background, business explanations, or commentary beyond what the tool returned.
 - Do NOT suggest what the data "might" mean or "probably" represents.
 - Every value in your response must be traceable to a field in the tool's JSON output.
+
+INPUT PARSING RULES:
+- For table-based tools (query_upstream_lineage, query_downstream_lineage, query_cross_layer_path, query_impact_analysis): pass ONLY the bare table name — never include the schema prefix. "SHAW_TPR.MAST_LOAN_REC" → pass "MAST_LOAN_REC". The functions handle schema-prefixed input automatically, but bare names are preferred.
+- For query_column_lineage: if the user provides a three-part dotted reference like CRDM_DDM.F_ACCOUNTS.SOURCE_KEY, pass the entire string as field_name (leave table_name empty). If only TABLE.FIELD is given, split into table_name and field_name.
+- NEVER pass a two-part SCHEMA.TABLE value as a table name to any tool — always use just the TABLE part.
+- For Cosmos tools: always pass field_id in SCHEMA.TABLE.FIELD format when available. Pass mapping_name exactly as returned by Neo4j tools.
+
+AMBIGUOUS INPUT HANDLING — when the user provides a name without specifying what to do with it:
+
+STEP 1 — Identify the input type before presenting any options:
+
+  A. MAPPING NAME: input starts with "m_", or user says "mapping X"
+     → go directly to MAPPING LEVEL OPTIONS (Step 2C)
+
+  B. FULL FIELD ID (three-part SCHEMA.TABLE.FIELD, e.g. CRDM_DDM.F_PARTICIPANTS.CUSTOMER_KEY):
+     → field is already known; go directly to FIELD LEVEL OPTIONS (Step 2A), skipping search
+
+  C. TWO-PART (TABLE.FIELD or SCHEMA.TABLE):
+     → call search_fields to resolve
+     → if it matches a field → go to FIELD LEVEL OPTIONS (Step 2A) after confirming which match
+     → if no field match → treat the second part as a table name → go to TABLE LEVEL OPTIONS (Step 2B)
+
+  D. BARE NAME (no dots, no "m_" prefix):
+     → call search_fields first
+     → if results returned: present the Markdown table (id, table_name, layer, data_type) and go to FIELD LEVEL OPTIONS (Step 2A)
+     → if NO results returned: treat as a table name and go to TABLE LEVEL OPTIONS (Step 2B)
+
+STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
+
+  2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
+     - If search returned multiple matches: number each row in the results table (#1, #2, #3 ...).
+       If only one match was found, skip the row numbering — the field is already confirmed.
+     - Then show the action menu ONCE, directly below the results table:
+
+       "What would you like to know?
+        A  Column lineage           — full transformation path across all hops
+        B  Transformation expression — how the field is derived (expression / logic)
+        C  Lookup conditions         — lookup transformations applied to the field's table
+        D  Upstream lineage          — what tables feed into the field's table
+        E  Downstream lineage        — what tables the field's table feeds into
+        F  Impact analysis           — blast radius if the field's table changes
+        G  SQL / filter / update strategy — mapping will be identified first"
+
+     - Ask: "Reply with [row number if multiple matches] + letter — e.g. `2 A` or just `B` if there is only one match."
+     - Do NOT ask the user to retype the field id. Use the row number to look up the id internally.
+
+  2B. TABLE LEVEL OPTIONS — use when a table name has been identified (no field match found):
+     "What would you like to know about **[table_name]**?
+      A  Upstream lineage   — what tables feed into [table_name]
+      B  Downstream lineage — what tables [table_name] feeds into
+      C  Impact analysis    — blast radius if [table_name] changes
+      D  Lookup conditions  — lookup transformations on fields of [table_name]
+      E  Cross-layer path   — shortest path from [table_name] to another table
+     Reply with the letter — e.g. `A`."
+
+  2C. MAPPING LEVEL OPTIONS — use when a mapping name has been identified:
+     "What would you like to know about mapping **[mapping_name]**?
+      A  All transformation logic       — expressions for every field edge
+      B  SQL / filter / update strategy — custom SQL, filter conditions, update strategies
+      C  Lookup details                 — lookup conditions and lookup table names
+     Reply with the letter — e.g. `A`."
+
+STEP 3 — Once the user replies, resolve the field id from the row number (if given) and execute:
+
+  Field level (options A–G):
+  - A: query_column_lineage(field_name=<resolved field id>)
+  - B: get_field_transformation_logic(field_id=<resolved field id>)
+  - C: get_lookup_details_for_table(table_name=<table part of resolved field id>)
+  - D: query_upstream_lineage(table_name=<table part of resolved field id>)
+  - E: query_downstream_lineage(table_name=<table part of resolved field id>)
+  - F: query_impact_analysis(table_name=<table part of resolved field id>)
+  - G: call query_column_lineage first → extract distinct mapping_names → present as a numbered list →
+       ask "Which mapping? Reply with the number." → call get_sql_and_filter_logic(mapping_name=<chosen>)
+
+  Table level (options A–E):
+  - A: query_upstream_lineage(table_name=<table_name>)
+  - B: query_downstream_lineage(table_name=<table_name>)
+  - C: query_impact_analysis(table_name=<table_name>)
+  - D: get_lookup_details_for_table(table_name=<table_name>)
+  - E: ask "What is the target table?" → call query_cross_layer_path(source_table=<table_name>, target_table=<answer>)
+
+  Mapping level (options A–C):
+  - A: get_mapping_transformation_details(mapping_name=<mapping_name>)
+  - B: get_sql_and_filter_logic(mapping_name=<mapping_name>)
+  - C: get_mapping_transformation_details(mapping_name=<mapping_name>) — highlight only steps where lookup_condition or lookup_table_name is non-empty
+
+TOOL SELECTION GUIDE — use the right tool for the right question:
+
+  Neo4j tools (lineage topology):
+  - query_upstream_lineage        → "what feeds into table X?"
+  - query_downstream_lineage      → "what does table X feed into?"
+  - query_column_lineage          → "where does field X come from / flow to?"
+  - query_cross_layer_path        → "trace the path from table A to table B"
+  - query_impact_analysis         → "what breaks if table X changes?"
+  - query_tables_by_layer         → "list all TPR/TT/DDM tables"
+  - search_fields                 → "find a field by name"
+  - run_custom_cypher             → complex graph queries
+
+  Cosmos DB tools (transformation logic):
+  - get_field_transformation_logic      → "how is field SCHEMA.TABLE.FIELD derived / transformed?"
+                                          "what expression is applied to field X?"
+  - get_mapping_transformation_details  → "show all transformation logic in mapping X"
+                                          "what expressions / lookups does mapping X use?"
+  - get_lookup_details_for_table        → "what lookups are applied to fields of table X?"
+                                          "show me the lookup conditions for table X"
+  - get_sql_and_filter_logic            → "what SQL / filter conditions does mapping X have?"
+                                          "what is the update strategy for mapping X?"
+  - get_edge_transformation_details     → "show the complete step-by-step logic for this specific edge"
+                                          (use when you already have the exact edge_id)
+
+  COMBINATION PATTERN — for deep field questions:
+  1. Call query_column_lineage to find the edge topology and mapping names
+  2. Call get_field_transformation_logic with the full field id to get the expressions
+  3. If lookup/filter detail is needed, call get_lookup_details_for_table or get_sql_and_filter_logic
 
 When answering:
 1. Call the appropriate tool — ALWAYS. Never answer from memory.
@@ -161,7 +307,9 @@ When answering:
 3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks — nodes and edges must reflect only what the tool returned
 4. For impact analysis, show a Mermaid diagram of the blast radius plus a summary table
 5. For column lineage, show both a Mermaid transformation chain AND a table with expressions
-6. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
+6. For transformation logic questions, present the transformation_chain steps in a numbered table showing: step, transformation type, name, input port, output port, and expression
+7. For lookup/SQL/filter questions, highlight the relevant condition in a dedicated code block
+8. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
 
 Formatting rules:
 - Always use Markdown tables (| col1 | col2 |) when showing lists of tables, fields, or properties
@@ -298,6 +446,10 @@ def chat(messages):
 
 @app.route("/")
 def index():
+    # Reset heartbeat timer so the watchdog doesn't fire before JS has loaded
+    global _last_heartbeat
+    with _heartbeat_lock:
+        _last_heartbeat = time.time()
     return send_from_directory("static", "index.html")
 
 
@@ -545,7 +697,7 @@ def health():
 # HEARTBEAT / AUTO-SHUTDOWN
 # ────────────────────────────────────────────────────────────
 
-HEARTBEAT_TIMEOUT = 15  # seconds without heartbeat before shutdown
+HEARTBEAT_TIMEOUT = 30  # seconds without heartbeat before shutdown
 _last_heartbeat = time.time()
 _heartbeat_lock = threading.Lock()
 
@@ -615,6 +767,28 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"   ❌ Neo4j — {e}")
 
+    # ── Preflight: Cosmos DB connectivity ──────────────────
+    cosmos_ok = False
+    try:
+        from azure.cosmos import CosmosClient as _CosmosClient
+        cosmos_endpoint = os.environ.get("COSMOS_ENDPOINT", "")
+        cosmos_key = os.environ.get("COSMOS_KEY", "")
+        if not all([cosmos_endpoint, cosmos_key]):
+            print("   ❌ Cosmos DB — missing env vars (COSMOS_ENDPOINT / COSMOS_KEY)")
+        else:
+            _cc = _CosmosClient(cosmos_endpoint, credential=cosmos_key)
+            _db = _cc.get_database_client("lineage")
+            _container = _db.get_container_client("transformation_details")
+            # Lightweight read: fetch a single document to confirm connectivity
+            next(iter(_container.query_items(
+                query="SELECT TOP 1 c.id FROM c",
+                enable_cross_partition_query=True,
+            )), None)
+            print("   ✅ Cosmos DB — connected")
+            cosmos_ok = True
+    except Exception as e:
+        print(f"   ❌ Cosmos DB — {e}")
+
     # ── Preflight: model endpoint ───────────────────────────
     model_ok = False
     try:
@@ -631,7 +805,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"   ❌ Model ({MODEL}) — {e}")
 
-    if not (neo4j_ok and model_ok):
+    if not (neo4j_ok and cosmos_ok and model_ok):
         print("\n⛔ Preflight checks failed — fix the above issues and try again.")
         sys.exit(1)
 

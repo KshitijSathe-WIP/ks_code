@@ -153,6 +153,10 @@
             animation: fadeIn 0.3s ease;
         }
 
+        .message.agent {
+            max-width: 95%;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
@@ -190,6 +194,7 @@
         .message.agent .message-bubble {
             background: var(--agent-bubble);
             border-bottom-left-radius: 4px;
+            overflow-x: auto;
         }
 
         /* Tool calls display */
@@ -420,15 +425,17 @@
         /* Tables */
         .message-bubble table {
             border-collapse: collapse;
-            width: 100%;
+            width: auto;
+            min-width: 100%;
             margin: 10px 0;
-            font-size: 13px;
+            font-size: 12px;
+            white-space: nowrap;
         }
 
         .message-bubble th,
         .message-bubble td {
             border: 1px solid var(--border);
-            padding: 8px 12px;
+            padding: 5px 10px;
             text-align: left;
         }
 
@@ -542,9 +549,11 @@
         let isProcessing = false;
 
         // ─── Heartbeat (keeps server alive while browser is open) ───
-        setInterval(() => {
+        function sendHeartbeat() {
             fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-        }, 5000);
+        }
+        sendHeartbeat();  // fire immediately on script load, don't wait 5s
+        setInterval(sendHeartbeat, 5000);
 
         // ─── Shutdown on tab/window close ───
         window.addEventListener('beforeunload', () => {

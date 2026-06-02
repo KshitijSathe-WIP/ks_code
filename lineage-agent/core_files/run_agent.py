@@ -59,6 +59,7 @@ def _init_tools():
         "query_cross_layer_path":    m.query_cross_layer_path,
         "query_impact_analysis":     m.query_impact_analysis,
         "query_tables_by_layer":     m.query_tables_by_layer,
+        "search_fields":             m.search_fields,
         "run_custom_cypher":         m.run_custom_cypher,
     })
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
