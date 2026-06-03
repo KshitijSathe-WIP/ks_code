@@ -100,9 +100,9 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
     :param table_name: The table containing this field. Leave empty if using dotted id.
                        Example: "F_ACCOUNTS"
     :return: A JSON array of every edge in the lineage paths, each with
-             from_field, from_table, from_layer, from_schema, to_field, to_table,
-             to_layer, to_schema, mapping_name, transformation_name,
-             transformation_type, and expression.
+             from_field, from_table, from_layer, from_schema, from_data_type, from_precision,
+             to_field, to_table, to_layer, to_schema, to_data_type, to_precision,
+             mapping_name, transformation_name, transformation_type, and expression.
     :rtype: str
     """
     # If field_name contains dots, treat it as the node's id property
@@ -119,10 +119,14 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                    from_node.table_name      AS from_table,
                    from_node.layer           AS from_layer,
                    from_node.db_schema       AS from_schema,
+                   from_node.data_type       AS from_data_type,
+                   from_node.precision       AS from_precision,
                    to_node.field_name        AS to_field,
                    to_node.table_name        AS to_table,
                    to_node.layer             AS to_layer,
                    to_node.db_schema         AS to_schema,
+                   to_node.data_type         AS to_data_type,
+                   to_node.precision         AS to_precision,
                    rel.mapping_name          AS mapping_name,
                    rel.transformation_name   AS transformation_name,
                    rel.transformation_type   AS transformation_type,
@@ -147,10 +151,14 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                from_node.table_name      AS from_table,
                from_node.layer           AS from_layer,
                from_node.db_schema       AS from_schema,
+               from_node.data_type       AS from_data_type,
+               from_node.precision       AS from_precision,
                to_node.field_name        AS to_field,
                to_node.table_name        AS to_table,
                to_node.layer             AS to_layer,
                to_node.db_schema         AS to_schema,
+               to_node.data_type         AS to_data_type,
+               to_node.precision         AS to_precision,
                rel.mapping_name          AS mapping_name,
                rel.transformation_name   AS transformation_name,
                rel.transformation_type   AS transformation_type,
@@ -186,7 +194,9 @@ def query_cross_layer_path(source_table: str, target_table: str) -> str:
                  table_name: n.table_name,
                  field_name: n.field_name,
                  layer:      n.layer,
-                 db_schema:  n.db_schema
+                 db_schema:  n.db_schema,
+                 data_type:  n.data_type,
+                 precision:  n.precision
              }] AS lineage_path,
              length(path) AS total_hops
         RETURN lineage_path, total_hops
@@ -266,7 +276,7 @@ def search_fields(search_term: str) -> str:
                         or TABLE.FIELD / SCHEMA.TABLE.FIELD dotted format.
                         Example: "SOURCE_KEY", "F_ACCOUNT", or "F_ACCOUNTS.SOURCE_KEY"
     :return: A JSON array of matching Field nodes with db_schema, table_name,
-             field_name, layer, and data_type. Limited to 50 results.
+             field_name, layer, data_type, and precision. Limited to 50 results.
     :rtype: str
     """
     # If dotted format, search each part independently and intersect in Cypher
@@ -281,7 +291,8 @@ def search_fields(search_term: str) -> str:
                    f.table_name  AS table_name,
                    f.field_name  AS field_name,
                    f.layer       AS layer,
-                   f.data_type   AS data_type
+                   f.data_type   AS data_type,
+                   f.precision   AS precision
             ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
             LIMIT 50
         """
@@ -297,7 +308,8 @@ def search_fields(search_term: str) -> str:
                    f.table_name  AS table_name,
                    f.field_name  AS field_name,
                    f.layer       AS layer,
-                   f.data_type   AS data_type
+                   f.data_type   AS data_type,
+                   f.precision   AS precision
             ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
             LIMIT 50
         """
@@ -312,7 +324,8 @@ def search_fields(search_term: str) -> str:
                f.table_name  AS table_name,
                f.field_name  AS field_name,
                f.layer       AS layer,
-               f.data_type   AS data_type
+               f.data_type   AS data_type,
+               f.precision   AS precision
         ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
         LIMIT 50
     """
