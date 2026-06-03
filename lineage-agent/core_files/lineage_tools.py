@@ -16,9 +16,10 @@ neo4j_client = Neo4jLineageClient()
 
 
 def _bare_table(name: str) -> str:
-    """Strip optional SCHEMA. prefix so 'SHAW_TPR.MAST_LOAN_REC' → 'MAST_LOAN_REC'."""
+    """Strip optional SCHEMA. prefix and normalize to uppercase.
+    'SHAW_TPR.MAST_LOAN_REC' → 'MAST_LOAN_REC', 'part_sold' → 'PART_SOLD'."""
     parts = name.strip().split('.')
-    return parts[-1] if len(parts) > 1 else name
+    return (parts[-1] if len(parts) > 1 else name).upper()
 
 
 # ─── 1. Upstream Lineage (Table Level) ───
@@ -186,11 +187,14 @@ def query_cross_layer_path(source_table: str, target_table: str) -> str:
     """
     source_table = _bare_table(source_table)
     target_table = _bare_table(target_table)
+    # Traverse outward from all source-table fields (bounded to 15 hops) until
+    # a target-table field is reached.  Avoids a cartesian-product + shortestPath
+    # which can timeout on Aura when either table has many fields.
     cypher = """
-        MATCH (src:Field {table_name: $source_table}),
-              (tgt:Field {table_name: $target_table})
-        MATCH path = shortestPath((src)-[:TRANSFORMS_TO*]->(tgt))
-        WITH [n IN nodes(path) | {
+        MATCH (src:Field {table_name: $source_table})
+        MATCH path = (src)-[:TRANSFORMS_TO*1..15]->(tgt:Field {table_name: $target_table})
+        WITH path,
+             [n IN nodes(path) | {
                  table_name: n.table_name,
                  field_name: n.field_name,
                  layer:      n.layer,
