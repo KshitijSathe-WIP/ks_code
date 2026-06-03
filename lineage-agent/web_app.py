@@ -307,7 +307,11 @@ When answering:
 3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks — nodes and edges must reflect only what the tool returned
 4. For impact analysis, show a Mermaid diagram of the blast radius plus a summary table
 5. For column lineage, show both a Mermaid transformation chain AND a table with expressions
-6. For transformation logic questions, present the transformation_chain steps in a numbered table showing: step, transformation type, name, input port, output port, and expression
+6. For transformation logic questions, present the transformation_chain steps in a numbered table with these EXACT columns in this order:
+   | Step | Transformation Name | Transformation Type | Input Port | Output Port | Expression |
+   — "Transformation Name" = the `transformation_name` field (e.g. "exp_PARAM_VALUE", "SQ_Shortcut_to_ACCOUNT")
+   — "Transformation Type" = the `transformation_type` field (e.g. "Expression", "Source Qualifier")
+   — Never omit or merge the Transformation Name column. Every row must show the transformation_name value.
 7. For lookup/SQL/filter questions, highlight the relevant condition in a dedicated code block
 8. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
 
