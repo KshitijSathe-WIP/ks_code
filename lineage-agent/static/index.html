@@ -8,19 +8,19 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"></script>
     <style>
         :root {
-            --bg-primary: #1a1a2e;
-            --bg-secondary: #16213e;
-            --bg-chat: #0f3460;
-            --accent: #e94560;
-            --accent-hover: #ff6b6b;
-            --text-primary: #eaeaea;
-            --text-secondary: #a0a0b0;
-            --user-bubble: #533483;
-            --agent-bubble: #1e3a5f;
-            --tool-bg: #0d2137;
-            --border: #2a2a4a;
-            --success: #4caf50;
-            --error: #f44336;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f0f7f0;
+            --bg-chat: #e8f5e9;
+            --accent: #2e7d32;
+            --accent-hover: #43a047;
+            --text-primary: #1b2b1b;
+            --text-secondary: #5a7a5a;
+            --user-bubble: #388e3c;
+            --agent-bubble: #c8e6c9;
+            --tool-bg: #dcedc8;
+            --border: #b2dfb2;
+            --success: #2e7d32;
+            --error: #c62828;
         }
 
         * {
@@ -188,11 +188,13 @@
 
         .message.user .message-bubble {
             background: var(--user-bubble);
+            color: #ffffff;
             border-bottom-right-radius: 4px;
         }
 
         .message.agent .message-bubble {
             background: var(--agent-bubble);
+            color: var(--text-primary);
             border-bottom-left-radius: 4px;
             overflow-x: auto;
         }
@@ -216,7 +218,7 @@
         .tool-call-item {
             margin-top: 6px;
             padding: 6px 8px;
-            background: rgba(255,255,255,0.03);
+            background: rgba(0,100,0,0.06);
             border-radius: 4px;
         }
 
@@ -379,7 +381,7 @@
 
         .example-card:hover {
             border-color: var(--accent);
-            background: rgba(233, 69, 96, 0.1);
+            background: rgba(46, 125, 50, 0.1);
         }
 
         /* Scrollbar */
@@ -440,22 +442,22 @@
         }
 
         .message-bubble th {
-            background: rgba(233, 69, 96, 0.15);
+            background: rgba(46, 125, 50, 0.15);
             font-weight: 600;
-            color: var(--accent-hover);
+            color: var(--accent);
         }
 
         .message-bubble tr:nth-child(even) {
-            background: rgba(255,255,255,0.03);
+            background: rgba(0,100,0,0.05);
         }
 
         .message-bubble tr:hover {
-            background: rgba(255,255,255,0.06);
+            background: rgba(0,100,0,0.10);
         }
 
         /* Mermaid diagrams */
         .message-bubble .mermaid {
-            background: rgba(255,255,255,0.05);
+            background: rgba(0,100,0,0.05);
             border-radius: 8px;
             padding: 16px;
             margin: 10px 0;
@@ -497,7 +499,7 @@
         <div class="header-left">
             <span class="header-icon">🧬</span>
             <div>
-                <h1><span style="color:#00B04F">T</span><span style="color:#ffffff">i</span><span style="color:#00B04F">D</span><span style="color:#ffffff">y</span></h1>
+                <h1><span style="color:#00B04F">T</span><span style="color:#000000">i</span><span style="color:#00B04F">D</span><span style="color:#000000">y</span></h1>
                 <span class="subtitle">Conversational Data Catalogue</span>
             </div>
         </div>
