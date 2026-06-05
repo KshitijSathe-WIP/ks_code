@@ -1,10 +1,9 @@
 #!/bin/bash
 # startup.sh — Azure App Service startup for TiDy Lineage Agent
-# Called via App Service startup command: bash startup.sh
+# Startup command in Azure: bash /home/site/wwwroot/startup.sh
 
 cd /home/site/wwwroot
 
-# Azure App Service sets PORT env var; default to 8000
 export PORT=${PORT:-8000}
 
 exec gunicorn \
