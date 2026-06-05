@@ -141,6 +141,10 @@ def init_tools():
     return True
 
 
+# ── Auto-load tools when imported (e.g. by gunicorn) ───────
+init_tools()
+
+
 # ────────────────────────────────────────────────────────────
 # SYSTEM PROMPT
 # ────────────────────────────────────────────────────────────
