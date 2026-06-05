@@ -185,6 +185,7 @@ def _parse_transformations(t_elements) -> dict:
                 "datatype"    : tf.get("DATATYPE", ""),
                 "precision"   : tf.get("PRECISION", ""),
                 "porttype"    : tf.get("PORTTYPE", ""),
+                "ref_field"   : tf.get("REF_FIELD", ""),
             }
 
         # Capture all TABLEATTRIBUTE values (lookup cond, SQ SQL, filter, etc.)
@@ -365,6 +366,20 @@ def extract_mapping_details(
             for ip in input_ports:
                 for op in output_ports:
                     transform_port_fwd[(inst_name, ip)].append((inst_name, op))
+            continue
+
+        # For Routers: output ports are linked to input ports via REF_FIELD attribute
+        # (not via EXPRESSION), e.g. LN_ACQUIRED_FROM_CD1 REF_FIELD="LN_ACQUIRED_FROM_CD"
+        if t_type == "Router":
+            for fname, finfo in fields.items():
+                ref = finfo.get("ref_field", "")
+                if ref and ref in input_ports and fname in output_ports:
+                    transform_port_fwd[(inst_name, ref)].append((inst_name, fname))
+            # Fallback: if no REF_FIELD entries resolved, map each input to same-named output
+            if not any(k[0] == inst_name for k in transform_port_fwd):
+                for ip in input_ports:
+                    if ip in output_ports:
+                        transform_port_fwd[(inst_name, ip)].append((inst_name, ip))
             continue
 
         local_vars = {f for f in fields if f not in output_ports and f not in input_ports}

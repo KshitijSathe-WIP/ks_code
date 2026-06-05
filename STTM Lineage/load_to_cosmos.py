@@ -136,9 +136,8 @@ def ensure_container(client: CosmosClient, database_name: str, container_name: s
 def delete_container(client: CosmosClient, database_name: str, container_name: str):
     """Delete the container (for --replace mode)."""
     try:
-        db        = client.get_database_client(database_name)
-        container = db.get_container_client(container_name)
-        container.delete_container()
+        db = client.get_database_client(database_name)
+        db.delete_container(container_name)
         print(f"  Deleted container '{container_name}'.")
     except exceptions.CosmosResourceNotFoundError:
         print(f"  Container '{container_name}' did not exist — nothing to delete.")

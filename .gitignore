@@ -8,3 +8,6 @@ temp/
 *.zip
 *.log
 
+
+STTM Lineage/Output Files/transformation_details.json
+STTM Lineage/Output Files/sample_lineage.json

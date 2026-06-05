@@ -84,9 +84,9 @@ def query_downstream_lineage(table_name: str, max_depth: str = "10") -> str:
 # ─── 3. Field-Level Lineage ───
 def query_column_lineage(field_name: str, table_name: str) -> str:
     """
-    Retrieves field-level lineage showing ALL paths that flow into a specific field.
-    Traces TRANSFORMS_TO backwards through every intermediate hop to show the
-    complete lineage chain (e.g. TPR → TT → TT → DDM).
+    Retrieves field-level lineage showing ALL edges connected to a specific field —
+    both upstream (what flows INTO the field) and downstream (what the field flows INTO).
+    Traces TRANSFORMS_TO in both directions to give a complete picture.
 
     Accepts two input styles:
     - Dotted id format: pass field_name="CRDM_DDM.F_ACCOUNTS.SOURCE_KEY", table_name=""
@@ -106,15 +106,8 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
              mapping_name, transformation_name, transformation_type, and expression.
     :rtype: str
     """
-    # If field_name contains dots, treat it as the node's id property
-    if field_name.count('.') >= 2:
-        cypher = """
-            MATCH (target:Field {id: $field_id})
-            MATCH path = (source:Field)-[:TRANSFORMS_TO*1..10]->(target)
-            UNWIND range(0, length(path)-1) AS idx
-            WITH relationships(path)[idx] AS rel,
-                 nodes(path)[idx] AS from_node,
-                 nodes(path)[idx+1] AS to_node
+    # Shared RETURN clause used in both query variants
+    _RETURN_COLS = """
             RETURN DISTINCT
                    from_node.field_name      AS from_field,
                    from_node.table_name      AS from_table,
@@ -133,43 +126,62 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                    rel.transformation_type   AS transformation_type,
                    rel.expression            AS expression
             ORDER BY from_layer ASC, from_table ASC, from_field ASC
+    """
+
+    def _run_bidirectional(match_clause: str, params: dict) -> str:
+        """Run backward (upstream) query; if empty, try forward (downstream); merge both."""
+        backward = f"""
+            {match_clause}
+            MATCH path = (source:Field)-[:TRANSFORMS_TO*1..10]->(anchor)
+            UNWIND range(0, length(path)-1) AS idx
+            WITH relationships(path)[idx] AS rel,
+                 nodes(path)[idx] AS from_node,
+                 nodes(path)[idx+1] AS to_node
+            {_RETURN_COLS}
         """
-        return neo4j_client.run_cypher(cypher, {"field_id": field_name})
+        forward = f"""
+            {match_clause}
+            MATCH path = (anchor)-[:TRANSFORMS_TO*1..10]->(downstream:Field)
+            UNWIND range(0, length(path)-1) AS idx
+            WITH relationships(path)[idx] AS rel,
+                 nodes(path)[idx] AS from_node,
+                 nodes(path)[idx+1] AS to_node
+            {_RETURN_COLS}
+        """
+        result_back = neo4j_client.run_cypher(backward, params)
+        result_fwd  = neo4j_client.run_cypher(forward,  params)
+
+        import json as _json
+        rows_back = _json.loads(result_back)
+        rows_fwd  = _json.loads(result_fwd)
+
+        # Merge and deduplicate by (from_table, from_field, to_table, to_field, mapping_name)
+        seen = set()
+        merged = []
+        for row in rows_back + rows_fwd:
+            key = (row.get("from_field"), row.get("from_table"),
+                   row.get("to_field"),   row.get("to_table"),
+                   row.get("mapping_name"))
+            if key not in seen:
+                seen.add(key)
+                merged.append(row)
+        return _json.dumps(merged, ensure_ascii=False, indent=2)
+
+    # If field_name contains dots, treat it as the node's id property
+    if field_name.count('.') >= 2:
+        return _run_bidirectional(
+            "MATCH (anchor:Field {id: $field_id})",
+            {"field_id": field_name}
+        )
 
     # If field_name is TABLE.FIELD format (1 dot), split into components
     if field_name.count('.') == 1 and not table_name:
         table_name, field_name = field_name.split('.', 1)
 
-    cypher = """
-        MATCH (target:Field {field_name: $field_name, table_name: $table_name})
-        MATCH path = (source:Field)-[:TRANSFORMS_TO*1..10]->(target)
-        UNWIND range(0, length(path)-1) AS idx
-        WITH relationships(path)[idx] AS rel,
-             nodes(path)[idx] AS from_node,
-             nodes(path)[idx+1] AS to_node
-        RETURN DISTINCT
-               from_node.field_name      AS from_field,
-               from_node.table_name      AS from_table,
-               from_node.layer           AS from_layer,
-               from_node.db_schema       AS from_schema,
-               from_node.data_type       AS from_data_type,
-               from_node.precision       AS from_precision,
-               to_node.field_name        AS to_field,
-               to_node.table_name        AS to_table,
-               to_node.layer             AS to_layer,
-               to_node.db_schema         AS to_schema,
-               to_node.data_type         AS to_data_type,
-               to_node.precision         AS to_precision,
-               rel.mapping_name          AS mapping_name,
-               rel.transformation_name   AS transformation_name,
-               rel.transformation_type   AS transformation_type,
-               rel.expression            AS expression
-        ORDER BY from_layer ASC, from_table ASC, from_field ASC
-    """
-    return neo4j_client.run_cypher(cypher, {
-        "field_name": field_name,
-        "table_name": table_name
-    })
+    return _run_bidirectional(
+        "MATCH (anchor:Field {field_name: $field_name, table_name: $table_name})",
+        {"field_name": field_name, "table_name": table_name}
+    )
 
 # ─── 4. Cross-Layer Path ───
 def query_cross_layer_path(source_table: str, target_table: str) -> str:
@@ -342,12 +354,17 @@ def run_custom_cypher(cypher_query: str) -> str:
     Use this ONLY when the other lineage functions cannot answer the question.
     Only MATCH and RETURN queries are allowed.
     CREATE, DELETE, SET, MERGE, DROP, and REMOVE operations are blocked.
+    If no LIMIT is specified, one is added automatically:
+      - 500 for DISTINCT / COUNT / COLLECT / WITH queries
+      - 100 for all other queries
 
     Graph schema reference:
       MATCH (f:Field)-[r:TRANSFORMS_TO]->(g:Field)
       Field props  : id, db_schema, table_name, field_name, layer, data_type, precision
       Rel props    : mapping_name, folder_name, transformation_name, transformation_type, expression
       Layers       : 'TPR' | 'TT' | 'DDM'
+      Known transformation_type values: 'Expression', 'Source Qualifier', 'Lookup Procedure',
+                                        'Filter', 'Update Strategy', 'Aggregator', 'Router', 'Sequence Generator'
 
     :param cypher_query: A valid read-only Cypher query.
                          Example: "MATCH (f:Field {layer:'DDM'}) RETURN DISTINCT f.table_name LIMIT 10"
@@ -369,7 +386,21 @@ def run_custom_cypher(cypher_query: str) -> str:
             })
 
     # ─── Safety Gate: Enforce result limit ───
+    # Use a generous limit for DISTINCT/aggregation queries; lower for full-record queries.
     if "LIMIT" not in upper_query:
-        cypher_query = cypher_query.rstrip().rstrip(";") + " LIMIT 50"
+        if any(kw in upper_query for kw in ("DISTINCT", "COUNT(", "COLLECT(", "WITH ")):
+            cypher_query = cypher_query.rstrip().rstrip(";") + " LIMIT 500"
+        else:
+            cypher_query = cypher_query.rstrip().rstrip(";") + " LIMIT 100"
 
-    return neo4j_client.run_cypher(cypher_query)
+    result_json = neo4j_client.run_cypher(cypher_query)
+
+    # Append row count so the model doesn't have to count manually
+    import json as _json
+    try:
+        rows = _json.loads(result_json)
+        if isinstance(rows, list):
+            return _json.dumps({"row_count": len(rows), "rows": rows}, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return result_json

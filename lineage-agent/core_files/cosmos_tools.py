@@ -237,6 +237,77 @@ def get_lookup_details_for_table(table_name: str) -> str:
     return json.dumps(filtered, ensure_ascii=False, indent=2)
 
 
+# ─── Tool 5b: Get edges containing a specific transformation step name ───
+
+def get_edges_by_transformation_name(transformation_name: str) -> str:
+    """
+    Searches all edges whose transformation_chain contains a step with the
+    given transformation_name. Returns matching edges with their full chain.
+
+    Use this when the user provides a transformation name like "exp_Tgt_TT_D_PARTICIPANT",
+    "exp_TARGET_ANCHOR", "lkp_SOME_LOOKUP", "fil_FILTER_NAME" — i.e. any name that
+    identifies a specific transformation step rather than a mapping or field.
+
+    :param transformation_name: The exact transformation step name to search for.
+                                Example: "exp_Tgt_TT_D_PARTICIPANT"
+    :return: JSON array of matching edges (up to 200) with edge_id, from_vertex, to_vertex,
+             mapping_name, final_expression, transformation_steps_count, and the matched
+             step's fields: matched_step, matched_type, matched_input_port, matched_output_port,
+             matched_expression, matched_lookup_condition, matched_lookup_table.
+             (Full transformation_chain is omitted to keep response size manageable.)
+    :rtype: str
+    """
+    # NOTE: Do NOT select c.transformation_chain here — a single transformation step name
+    # (especially Router instances) can appear in thousands of edges, making the full-chain
+    # response too large for the model context window (observed: 72 MB for rtr_* names).
+    # Instead, project only the fields of the matched step (s.*) alongside edge metadata.
+    sql = """
+        SELECT
+            c.edge_id, c.from_vertex, c.to_vertex,
+            c.mapping_name, c.folder_name,
+            c.final_expression,
+            c.transformation_steps_count,
+            s.step                    AS matched_step,
+            s.transformation_name     AS matched_transformation_name,
+            s.transformation_type     AS matched_type,
+            s.input_port              AS matched_input_port,
+            s.output_port             AS matched_output_port,
+            s.port_expression         AS matched_expression,
+            s.lookup_condition        AS matched_lookup_condition,
+            s.lookup_table_name       AS matched_lookup_table
+        FROM c
+        JOIN s IN c.transformation_chain
+        WHERE s.transformation_name = @transformation_name
+        ORDER BY c.from_vertex
+        OFFSET 0 LIMIT 200
+    """
+    results_raw = _run_cosmos_query(sql, [{"name": "@transformation_name", "value": transformation_name}])
+    # If exact match returns nothing, try case-insensitive CONTAINS
+    if results_raw == "[]":
+        sql_contains = """
+            SELECT
+                c.edge_id, c.from_vertex, c.to_vertex,
+                c.mapping_name, c.folder_name,
+                c.final_expression,
+                c.transformation_steps_count,
+                s.step                    AS matched_step,
+                s.transformation_name     AS matched_transformation_name,
+                s.transformation_type     AS matched_type,
+                s.input_port              AS matched_input_port,
+                s.output_port             AS matched_output_port,
+                s.port_expression         AS matched_expression,
+                s.lookup_condition        AS matched_lookup_condition,
+                s.lookup_table_name       AS matched_lookup_table
+            FROM c
+            JOIN s IN c.transformation_chain
+            WHERE CONTAINS(UPPER(s.transformation_name), UPPER(@transformation_name))
+            ORDER BY c.from_vertex
+            OFFSET 0 LIMIT 200
+        """
+        results_raw = _run_cosmos_query(sql_contains, [{"name": "@transformation_name", "value": transformation_name}])
+    return results_raw
+
+
 # ─── Tool 5: Get SQL / filter logic for a mapping ───
 
 def get_sql_and_filter_logic(mapping_name: str) -> str:

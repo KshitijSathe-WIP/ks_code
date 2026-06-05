@@ -133,7 +133,11 @@ def parse_reusable_transformations(folder: ET.Element) -> dict:
         for tf in t.findall("TRANSFORMFIELD"):
             fname = tf.get("NAME", "")
             expr = tf.get("EXPRESSION") or tf.get("DEFAULTVALUE") or ""
-            fields[fname] = {"expression": expr, "datatype": tf.get("DATATYPE", "")}
+            fields[fname] = {
+                "expression": expr,
+                "datatype": tf.get("DATATYPE", ""),
+                "ref_field": tf.get("REF_FIELD", ""),
+            }
         transforms[name] = {"type": t_type, "fields": fields}
     return transforms
 
@@ -215,6 +219,7 @@ def extract_mapping_lineage(
                 "expression": expr,
                 "datatype": tf.get("DATATYPE", ""),
                 "precision": tf.get("PRECISION", ""),
+                "ref_field": tf.get("REF_FIELD", ""),
             }
         # Also check TABLE_ATTRIBUTE for lookup conditions
         lookup_cond = ""
@@ -314,6 +319,22 @@ def extract_mapping_lineage(
             for iport in input_ports:
                 for oport in output_ports:
                     transform_port_fwd[(inst_name, iport)].append((inst_name, oport))
+            continue
+
+        # For Routers: output ports are linked to input ports via REF_FIELD attribute
+        # (not via EXPRESSION), e.g. LN_ACQUIRED_FROM_CD1 REF_FIELD="LN_ACQUIRED_FROM_CD"
+        if t_type == "Router":
+            resolved_any = False
+            for fname, finfo in fields.items():
+                ref = finfo.get("ref_field", "")
+                if ref and ref in input_ports and fname in output_ports:
+                    transform_port_fwd[(inst_name, ref)].append((inst_name, fname))
+                    resolved_any = True
+            # Fallback: if no REF_FIELD entries resolved, map each input to same-named output
+            if not resolved_any:
+                for iport in input_ports:
+                    if iport in output_ports:
+                        transform_port_fwd[(inst_name, iport)].append((inst_name, iport))
             continue
 
         # Identify local variable ports (v_ prefix or PORTTYPE contains LOCAL VARIABLE)

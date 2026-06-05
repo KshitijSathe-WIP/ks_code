@@ -79,6 +79,12 @@ RULES
      → call get_field_transformation_logic(field_id=<field_id>)
      → reveals: the full port expression or aggregation formula
 
+   transformation_type = "Router"
+     → no expression is applied — Router passes data through to a named output group without modification
+     → note the router instance name (e.g. "rtr_TT_D_LOAN_ACCOUNT") from the transformation_name column
+     → no Cosmos escalation required; state: "field passes through Router [transformation_name] — data is routed without modification"
+     → ONLY if the user explicitly asks for full chain detail: call get_field_transformation_logic(field_id=<to_schema.to_table.to_field>)
+
    If multiple transformation types appear in the same lineage result, escalate for each unique type.
    Do NOT ask the user to supply field_id, mapping_name, or table_name — derive them from Step 1 results.
 5. When presenting results:

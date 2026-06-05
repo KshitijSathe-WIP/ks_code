@@ -125,11 +125,12 @@ def init_tools():
     try:
         import cosmos_tools as ct
         FUNCTION_REGISTRY.update({
-            "get_edge_transformation_details"    : ct.get_edge_transformation_details,
-            "get_field_transformation_logic"     : ct.get_field_transformation_logic,
-            "get_mapping_transformation_details" : ct.get_mapping_transformation_details,
-            "get_lookup_details_for_table"        : ct.get_lookup_details_for_table,
-            "get_sql_and_filter_logic"           : ct.get_sql_and_filter_logic,
+            "get_edge_transformation_details"       : ct.get_edge_transformation_details,
+            "get_field_transformation_logic"        : ct.get_field_transformation_logic,
+            "get_mapping_transformation_details"    : ct.get_mapping_transformation_details,
+            "get_lookup_details_for_table"          : ct.get_lookup_details_for_table,
+            "get_sql_and_filter_logic"              : ct.get_sql_and_filter_logic,
+            "get_edges_by_transformation_name"      : ct.get_edges_by_transformation_name,
         })
         print("   ✅ Cosmos DB tools loaded")
     except Exception as e:
@@ -192,6 +193,21 @@ INPUT PARSING RULES:
 - For query_column_lineage: if the user provides a three-part dotted reference like CRDM_DDM.F_ACCOUNTS.SOURCE_KEY, pass the entire string as field_name (leave table_name empty). If only TABLE.FIELD is given, split into table_name and field_name.
 - NEVER pass a two-part SCHEMA.TABLE value as a table name to any tool — always use just the TABLE part.
 - For Cosmos tools: always pass field_id in SCHEMA.TABLE.FIELD format when available. Pass mapping_name exactly as returned by Neo4j tools.
+
+EXPLICIT INTENT SHORTCUT — skip the menu entirely when BOTH the action AND the target are clear in a single message:
+
+  If the user explicitly names an action (e.g. "impact analysis", "upstream lineage", "downstream lineage",
+  "trace", "transformation logic", "lookup conditions") AND provides a table/field name in the same message,
+  resolve the name (call search_fields if needed), then call the appropriate tool IMMEDIATELY — do NOT show
+  an options menu and do NOT wait for a follow-up reply.
+
+  Examples that qualify for the shortcut:
+    "impact analysis if SIF_LOAN.SIF_SELL_ABA is changed"   → extract table SIF_LOAN → call query_impact_analysis("SIF_LOAN")
+    "upstream lineage of F_PARTICIPANTS"                    → call query_upstream_lineage("F_PARTICIPANTS")
+    "trace CUSTOMER_KEY from TPR to DDM"                    → call query_column_lineage("CUSTOMER_KEY")
+    "show transformation logic for CRDM_DDM.F_ACCOUNTS.AMT" → call get_field_transformation_logic(...)
+
+  Only fall through to the multi-step AMBIGUOUS INPUT HANDLING below when the intent is genuinely unclear.
 
 AMBIGUOUS INPUT HANDLING — when the user provides a name without specifying what to do with it:
 
@@ -293,6 +309,9 @@ TOOL SELECTION GUIDE — use the right tool for the right question:
                                           "show me the lookup conditions for table X"
   - get_sql_and_filter_logic            → "what SQL / filter conditions does mapping X have?"
                                           "what is the update strategy for mapping X?"
+  - get_edges_by_transformation_name    → "show me exp_Tgt_TT_D_PARTICIPANT"
+                                          "what edges use lkp_SOME_LOOKUP?"
+                                          (use whenever the user provides a step-level name: exp_, lkp_, fil_, upd_, SQ_)
   - get_edge_transformation_details     → "show the complete step-by-step logic for this specific edge"
                                           (use when you already have the exact edge_id)
 
@@ -314,6 +333,18 @@ When answering:
    — Never omit or merge the Transformation Name column. Every row must show the transformation_name value.
 7. For lookup/SQL/filter questions, highlight the relevant condition in a dedicated code block
 8. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
+9. TERMINOLOGY — use the correct term based on the name pattern:
+   - Names starting with "m_"   → "mapping"  (e.g. m_TMP_to_DDM_F_PARTICIPANTS)
+   - Names starting with "SQ_"  → "Source Qualifier transformation" — NEVER call these a "mapping"
+   - Names starting with "exp_" → "Expression transformation" — call get_edges_by_transformation_name
+   - Names starting with "lkp_" → "Lookup transformation"      — call get_edges_by_transformation_name
+   - Names starting with "fil_" → "Filter transformation"       — call get_edges_by_transformation_name
+   - Names starting with "upd_" → "Update Strategy transformation"   — call get_edges_by_transformation_name
+   - Names starting with "rtr_" → "Router transformation"            — call get_edges_by_transformation_name
+   When the user provides any name starting with exp_, lkp_, fil_, upd_, rtr_, or SQ_ as the subject of a query,
+   call get_edges_by_transformation_name(transformation_name=<that name>) — do NOT call get_mapping_transformation_details.
+   When a lookup query returns no results, say "There are no lookup conditions recorded for [table_name]" —
+   do NOT reference the Source Qualifier or any transformation name in the no-results message.
 
 Formatting rules:
 - Always use Markdown tables (| col1 | col2 |) when showing lists of tables, fields, or properties

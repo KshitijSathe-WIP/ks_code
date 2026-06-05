@@ -62,6 +62,19 @@ def _init_tools():
         "search_fields":             m.search_fields,
         "run_custom_cypher":         m.run_custom_cypher,
     })
+    try:
+        import cosmos_tools as ct
+        FUNCTION_REGISTRY.update({
+            "get_edge_transformation_details"    : ct.get_edge_transformation_details,
+            "get_field_transformation_logic"     : ct.get_field_transformation_logic,
+            "get_mapping_transformation_details" : ct.get_mapping_transformation_details,
+            "get_lookup_details_for_table"       : ct.get_lookup_details_for_table,
+            "get_sql_and_filter_logic"           : ct.get_sql_and_filter_logic,
+            "get_edges_by_transformation_name"   : ct.get_edges_by_transformation_name,
+        })
+        print("   ✅ Cosmos DB tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Cosmos tools unavailable (continuing without them): {e}")
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
 
 # ────────────────────────────────────────────────────────────
