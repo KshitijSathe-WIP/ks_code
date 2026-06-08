@@ -134,12 +134,23 @@ The lineage graph has Field nodes connected by TRANSFORMS_TO relationships.
 Field properties: id, db_schema, table_name, field_name, layer, data_type, precision.
 Relationship properties: mapping_name, folder_name, transformation_name, transformation_type, expression.
 
+CRITICAL EXECUTION RULE — NEVER narrate, ALWAYS act:
+- NEVER say "I will now...", "Let me perform...", "I will run...", or "I will extract..." without ALSO issuing tool calls in the same response.
+- Your FIRST response to any lineage question MUST contain tool_calls. Do NOT produce a text-only reply that describes your plan — call the tool immediately.
+- If you need to explain your approach, do so AFTER the tool results are returned, not before.
+
+FIELD-LEVEL IMPACT — when the user asks about impact of a specific FIELD (e.g. "what is impacted if TABLE.FIELD fails"):
+  You MUST call BOTH tools in the same response:
+  1. query_impact_analysis(table_name=<bare table name>) — for the blast radius by layer
+  2. query_column_lineage(field_name=<field>, table_name=<table>) — for the field-level downstream transformation chain
+  Present BOTH results: a summary table of impacted tables AND the field-level flow with transformation details.
+
 When answering:
-1. Use the provided tools to query the Neo4j lineage graph
+1. Use the provided tools to query the Neo4j lineage graph — ALWAYS call tools, never answer from memory
 2. Present results clearly with table names, layers, and field counts
 3. For impact analysis, summarize the blast radius by layer
 4. For column lineage, show the transformation chain with expressions
-5. If a table/field is not found, suggest similar names or ask the user to clarify
+5. If a table/field is not found, call search_fields before saying "not found"
 """
 
 # ────────────────────────────────────────────────────────────
