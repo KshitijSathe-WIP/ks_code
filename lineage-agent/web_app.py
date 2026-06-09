@@ -198,6 +198,10 @@ CRITICAL EXECUTION RULE — NEVER narrate, ALWAYS act:
 - If you need to explain your approach, do so AFTER the tool results are returned, not before.
 
 INPUT PARSING RULES:
+- MENU REPLIES: If the user's message matches a menu selection pattern (a digit + letter like "1A", "1 A", "2B",
+  or a single letter like "A", "B"), it is ALWAYS a response to the options menu you just presented.
+  NEVER pass such replies to search_fields or any other tool. Instead, resolve the row number and action
+  letter from the conversation context and call the appropriate tool with the previously identified field/table.
 - For table-based tools (query_upstream_lineage, query_downstream_lineage, query_cross_layer_path, query_impact_analysis): pass ONLY the bare table name — never include the schema prefix. "SHAW_TPR.MAST_LOAN_REC" → pass "MAST_LOAN_REC". The functions handle schema-prefixed input automatically, but bare names are preferred.
 - For query_column_lineage: if the user provides a three-part dotted reference like CRDM_DDM.F_ACCOUNTS.SOURCE_KEY, pass the entire string as field_name (leave table_name empty). If only TABLE.FIELD is given, split into table_name and field_name.
 - NEVER pass a two-part SCHEMA.TABLE value as a table name to any tool — always use just the TABLE part.
@@ -279,7 +283,22 @@ STEP 2 — Present the relevant option set and WAIT for the user's reply before 
       C  Lookup details                 — lookup conditions and lookup table names
      Reply with the letter — e.g. `A`."
 
-STEP 3 — Once the user replies, resolve the field id from the row number (if given) and execute:
+STEP 3 — MENU REPLY PARSING (CRITICAL — read carefully):
+
+  When the user's reply is a short code like "1A", "1 A", "2B", "B", "A", etc., it is a MENU SELECTION
+  from the options you presented in Step 2 — it is NOT a search query.
+
+  NEVER pass the user's raw reply (e.g. "1A", "2 B") to search_fields or any other tool.
+
+  Parsing rules:
+  - If the reply contains a digit followed by a letter (e.g. "1A", "1 A", "2B"):
+    • The DIGIT = the row number from your previously displayed results table
+    • The LETTER = the action from the menu (A, B, C, D, E, F, or G)
+    • Look up the field id / table name from that row in the conversation history
+  - If the reply is just a letter (e.g. "A", "B"):
+    • There was only one match, so use the single result from Step 1
+    • The LETTER = the action from the menu
+  - Then execute the action below using the RESOLVED field id or table name — NOT the raw reply text.
 
   Field level (options A–G):
   - A: query_column_lineage(field_name=<resolved field id>)
