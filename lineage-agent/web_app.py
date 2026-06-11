@@ -251,7 +251,13 @@ STEP 1 — Identify the input type before presenting any options:
 STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
 
   2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
-     - If search returned multiple matches: number each row in the results table (#1, #2, #3 ...).
+     - If search returned multiple matches: you MUST number each row sequentially (#1, #2, #3 ...) in the FIRST column of the Markdown table.
+       The table MUST have a "#" column as the leftmost column. Example:
+       | # | id | table_name | layer | data_type |
+       |---|---|---|---|---|
+       | 1 | CRDM_TMP.TT_X.FIELD | TT_X | TT | varchar |
+       | 2 | CRDM_DDM.F_X.FIELD | F_X | DDM | varchar |
+       NEVER omit the row numbers — the user needs them to make a selection.
        If only one match was found, skip the row numbering — the field is already confirmed.
      - Then show the action menu ONCE, directly below the results table:
 
@@ -416,6 +422,78 @@ def get_or_create_session(session_id=None):
 
 
 # ────────────────────────────────────────────────────────────
+# MENU REPLY REWRITER
+# ────────────────────────────────────────────────────────────
+
+_MENU_ACTIONS = {
+    "A": "Column lineage — full transformation path across all hops",
+    "B": "Transformation expression — how the field is derived",
+    "C": "Lookup conditions — lookup transformations applied to the field's table",
+    "D": "Upstream lineage — what tables feed into the field's table",
+    "E": "Downstream lineage — what tables the field's table feeds into",
+    "F": "Impact analysis — blast radius if the field's table changes",
+    "G": "SQL / filter / update strategy — mapping will be identified first",
+}
+
+# Matches: "1A", "1 A", "3a", "12 B", "A", "b", etc.
+_MENU_REPLY_RE = re.compile(r'^\s*(\d+)?\s*([A-Ga-g])\s*$')
+
+
+def _rewrite_menu_reply(user_message, messages):
+    """
+    If user_message looks like a menu selection (e.g. '3 A', 'B'),
+    rewrite it into an explicit instruction so the model cannot
+    misinterpret it as a search query.
+    Returns the (possibly rewritten) message.
+    """
+    m = _MENU_REPLY_RE.match(user_message)
+    if not m:
+        return user_message
+
+    row_num = m.group(1)  # may be None
+    action = m.group(2).upper()
+    action_desc = _MENU_ACTIONS.get(action, action)
+
+    # Check if the assistant recently presented a menu (look at last few messages)
+    has_menu_context = False
+    for msg in reversed(messages[-6:]):
+        if msg.get("role") == "assistant":
+            content = msg.get("content", "") or ""
+            if any(marker in content for marker in [
+                "Column lineage", "Transformation expression",
+                "Upstream lineage", "Downstream lineage",
+                "Impact analysis", "Lookup conditions",
+                "Reply with"
+            ]):
+                has_menu_context = True
+                break
+
+    if not has_menu_context:
+        return user_message
+
+    if row_num:
+        rewritten = (
+            f"MENU SELECTION — do NOT call search_fields. "
+            f"The user selected row #{row_num} from the search results table you displayed above, "
+            f"and action {action} ({action_desc}). "
+            f"Look up the field id from row #{row_num} in the results table in your previous message, "
+            f"then call the appropriate tool for action {action} using that resolved field/table. "
+            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
+        )
+    else:
+        rewritten = (
+            f"MENU SELECTION — do NOT call search_fields. "
+            f"The user selected action {action} ({action_desc}). "
+            f"There was only one match in your previous results, so use that field/table. "
+            f"Call the appropriate tool for action {action} using the field/table from your previous message. "
+            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
+        )
+
+    print(f"   [rewrite] '{user_message}' → menu selection: row={row_num}, action={action}")
+    return rewritten
+
+
+# ────────────────────────────────────────────────────────────
 # CHAT LOGIC (same as CLI)
 # ────────────────────────────────────────────────────────────
 
@@ -534,6 +612,9 @@ def api_chat():
 
     session_id = data.get("session_id")
     session_id, messages = get_or_create_session(session_id)
+
+    # Rewrite menu replies (e.g. "3 A") into explicit instructions
+    user_message = _rewrite_menu_reply(user_message, messages)
 
     messages.append({"role": "user", "content": user_message})
 
@@ -712,6 +793,10 @@ def api_chat_stream():
 
     session_id = data.get("session_id")
     session_id, messages = get_or_create_session(session_id)
+
+    # Rewrite menu replies (e.g. "3 A") into explicit instructions
+    user_message = _rewrite_menu_reply(user_message, messages)
+
     messages.append({"role": "user", "content": user_message})
 
     def generate():
