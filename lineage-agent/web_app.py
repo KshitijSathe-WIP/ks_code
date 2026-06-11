@@ -463,6 +463,31 @@ def _resolve_field_from_cache(session_id: str, row_num: int) -> str | None:
     return None
 
 
+def _build_menu_tool_call(action: str, resolved_field: str) -> dict | None:
+    """
+    Map a menu action letter + resolved SCHEMA.TABLE.FIELD to a direct
+    tool call dict {func_name, func_args}, or None if not mappable.
+    """
+    parts = resolved_field.split(".")
+    table = parts[1] if len(parts) == 3 else (parts[0] if len(parts) == 2 else None)
+    if not table:
+        return None
+
+    mapping = {
+        "A": ("query_column_lineage",           {"field_name": resolved_field, "table_name": ""}),
+        "B": ("get_field_transformation_logic",  {"field_id": resolved_field}),
+        "C": ("get_lookup_details_for_table",    {"table_name": table}),
+        "D": ("query_upstream_lineage",          {"table_name": table}),
+        "E": ("query_downstream_lineage",        {"table_name": table}),
+        "F": ("query_impact_analysis",           {"table_name": table}),
+        # G needs mapping context, model handles it
+    }
+    if action not in mapping:
+        return None
+    func_name, func_args = mapping[action]
+    return {"func_name": func_name, "func_args": func_args}
+
+
 # ────────────────────────────────────────────────────────────
 # MENU REPLY REWRITER
 # ────────────────────────────────────────────────────────────
@@ -486,23 +511,29 @@ def _rewrite_menu_reply(user_message, messages, session_id=None):
     If user_message looks like a menu selection (e.g. '3 A', 'B'),
     rewrite it into an explicit instruction so the model cannot
     misinterpret it as a search query.
-    Returns the (possibly rewritten) message.
+    Returns (rewritten_message, direct_call_info_or_None).
+    When direct_call_info is not None, the caller should execute the tool
+    directly and inject the result into messages before calling the model.
     """
     m = _MENU_REPLY_RE.match(user_message)
     if not m:
-        return user_message
+        return user_message, None
 
     row_num = m.group(1)  # may be None
     action = m.group(2).upper()
     action_desc = _MENU_ACTIONS.get(action, action)
 
     resolved_field = None
+    direct_call = None
 
     # ── Primary: use server-side search results cache (100% reliable) ──
     if row_num and session_id:
         resolved_field = _resolve_field_from_cache(session_id, int(row_num))
         if resolved_field:
             print(f"   [rewrite] '{user_message}' → cache hit: row={row_num}, field={resolved_field}, action={action}")
+            direct_call = _build_menu_tool_call(action, resolved_field)
+            if direct_call:
+                print(f"   [rewrite] → direct tool call: {direct_call['func_name']}({direct_call['func_args']})")
 
     # ── Fallback: parse the menu message markdown (only if cache miss) ──
     if not resolved_field:
@@ -528,9 +559,9 @@ def _rewrite_menu_reply(user_message, messages, session_id=None):
             if row_matches:
                 resolved_field = row_matches[0]
                 print(f"   [rewrite] '{user_message}' → markdown fallback: row={row_num}, field={resolved_field}, action={action}")
+                direct_call = _build_menu_tool_call(action, resolved_field)
 
     if resolved_field:
-        # Best case: we resolved the actual field from the table
         rewritten = (
             f"MENU SELECTION — do NOT call search_fields. "
             f"The user selected field \"{resolved_field}\" (row #{row_num}) "
@@ -557,7 +588,7 @@ def _rewrite_menu_reply(user_message, messages, session_id=None):
         )
 
     print(f"   [rewrite] '{user_message}' → menu selection: row={row_num}, action={action}, resolved={resolved_field}")
-    return rewritten
+    return rewritten, direct_call
 
 
 # ────────────────────────────────────────────────────────────
@@ -689,13 +720,38 @@ def api_chat():
     session_id, messages = get_or_create_session(session_id)
 
     # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message = _rewrite_menu_reply(user_message, messages, session_id)
+    user_message, direct_call = _rewrite_menu_reply(user_message, messages, session_id)
 
     messages.append({"role": "user", "content": user_message})
 
+    # ── Direct tool execution for cache-resolved menu selections ──
+    tool_calls_log = []
+    if direct_call:
+        func_name = direct_call["func_name"]
+        func_args = direct_call["func_args"]
+        try:
+            print(f"   [direct] Executing {func_name}({func_args})")
+            result = FUNCTION_REGISTRY[func_name](**func_args)
+            if result is None:
+                result = json.dumps({"result": "No data returned"})
+            tool_calls_log.append({"function": func_name, "args": func_args, "status": "success", "result_length": len(result)})
+        except Exception as e:
+            result = json.dumps({"error": str(e), "function": func_name})
+            tool_calls_log.append({"function": func_name, "args": func_args, "status": "error", "error": str(e)})
+        # Inject synthetic tool call + result so the model only formats
+        tc_id = f"menu_{uuid.uuid4().hex[:12]}"
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": tc_id, "type": "function",
+                            "function": {"name": func_name, "arguments": json.dumps(func_args)}}],
+        })
+        messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
+
     try:
         print(f"\n📨 User: {user_message[:80]}...")
-        response_text, tool_calls_log = chat(messages, session_id=session_id)
+        response_text, extra_tool_calls = chat(messages, session_id=session_id)
+        tool_calls_log.extend(extra_tool_calls)
         print(f"📤 Response sent ({len(response_text)} chars)\n")
         return jsonify({
             "session_id": session_id,
@@ -873,15 +929,42 @@ def api_chat_stream():
     session_id, messages = get_or_create_session(session_id)
 
     # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message = _rewrite_menu_reply(user_message, messages, session_id)
+    user_message, direct_call = _rewrite_menu_reply(user_message, messages, session_id)
 
     messages.append({"role": "user", "content": user_message})
+
+    # ── Pre-execute direct tool call if resolved from cache ──
+    direct_tool_log = None
+    if direct_call:
+        func_name = direct_call["func_name"]
+        func_args = direct_call["func_args"]
+        try:
+            print(f"   [direct] Executing {func_name}({func_args})")
+            result = FUNCTION_REGISTRY[func_name](**func_args)
+            if result is None:
+                result = json.dumps({"result": "No data returned"})
+            direct_tool_log = [{"function": func_name, "args": func_args, "status": "success", "result_length": len(result)}]
+        except Exception as e:
+            result = json.dumps({"error": str(e), "function": func_name})
+            direct_tool_log = [{"function": func_name, "args": func_args, "status": "error", "error": str(e)}]
+        tc_id = f"menu_{uuid.uuid4().hex[:12]}"
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": tc_id, "type": "function",
+                            "function": {"name": func_name, "arguments": json.dumps(func_args)}}],
+        })
+        messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
 
     def generate():
         print(f"\n📨 [stream] User: {user_message[:80]}...")
 
         # Send session id immediately
         yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+
+        # If we pre-executed a tool call, emit the tool event immediately
+        if direct_tool_log:
+            yield f"data: {json.dumps({'type': 'tools', 'tool_calls': direct_tool_log})}\n\n"
 
         q = queue.Queue()
 
