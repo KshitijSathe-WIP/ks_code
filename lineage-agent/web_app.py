@@ -254,12 +254,14 @@ STEP 1 — Identify the input type before presenting any options:
 STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
 
   2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
-     - If search returned multiple matches: you MUST number each row sequentially (#1, #2, #3 ...) in the FIRST column of the Markdown table.
+     - If search returned multiple matches: each result already has a "row" field — use THAT number as the row number in the FIRST column.
+       Do NOT renumber or reorder the results. Display them in the EXACT order returned by the tool.
        The table MUST have a "#" column as the leftmost column. Example:
        | # | id | table_name | layer | data_type |
        |---|---|---|---|---|
        | 1 | CRDM_TMP.TT_X.FIELD | TT_X | TT | varchar |
        | 2 | CRDM_DDM.F_X.FIELD | F_X | DDM | varchar |
+       CRITICAL: The "#" column MUST match the "row" field from the JSON. Do NOT sort, group, or reorder rows.
        NEVER omit the row numbers — the user needs them to make a selection.
        If only one match was found, skip the row numbering — the field is already confirmed.
      - Then show the action menu ONCE, directly below the results table:
@@ -436,15 +438,23 @@ def get_or_create_session(session_id=None):
     return new_id, sessions[new_id]
 
 
-def _cache_search_results(session_id: str, result_json: str):
-    """Parse search_fields JSON output and cache results 1-based for this session."""
+def _cache_search_results(session_id: str, result_json: str) -> str:
+    """
+    Parse search_fields JSON, inject 1-based 'row' numbers into each item,
+    cache the indexed results, and return the modified JSON string.
+    The row numbers force the model to present results in our order.
+    """
     try:
         rows = json.loads(result_json)
         if isinstance(rows, list) and rows:
+            for i, r in enumerate(rows):
+                r["row"] = i + 1  # inject 1-based row number
             _session_search_cache[session_id] = rows
             print(f"   [cache] Stored {len(rows)} search results for session {session_id[:8]}")
+            return json.dumps(rows, ensure_ascii=False, indent=2)
     except Exception:
         pass
+    return result_json
 
 
 def _resolve_field_from_cache(session_id: str, row_num: int) -> str | None:
@@ -667,9 +677,9 @@ def chat(messages, session_id=None):
                     log_entry["status"] = "success"
                     log_entry["result_length"] = len(result)
                     print(f"   [chat]    ✅ {func_name} returned {len(result)} chars")
-                    # Cache search_fields results for deterministic menu reply resolution
+                    # Cache search_fields results and inject row numbers
                     if func_name == "search_fields" and _current_session_id:
-                        _cache_search_results(_current_session_id, result)
+                        result = _cache_search_results(_current_session_id, result)
                 except Exception as e:
                     result = json.dumps({"error": str(e), "function": func_name})
                     log_entry["status"] = "error"
@@ -793,9 +803,9 @@ def _execute_tool_call(func_name, func_args, session_id=None):
             log_entry["status"] = "success"
             log_entry["result_length"] = len(result)
             print(f"   [stream]    ✅ {func_name} returned {len(result)} chars")
-            # Cache search_fields results for deterministic menu reply resolution
+            # Cache search_fields results and inject row numbers
             if func_name == "search_fields" and session_id:
-                _cache_search_results(session_id, result)
+                result = _cache_search_results(session_id, result)
         except Exception as e:
             result = json.dumps({"error": str(e), "function": func_name})
             log_entry["status"] = "error"
