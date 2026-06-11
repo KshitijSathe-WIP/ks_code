@@ -459,24 +459,37 @@ def _rewrite_menu_reply(user_message, messages):
     action = m.group(2).upper()
     action_desc = _MENU_ACTIONS.get(action, action)
 
-    # Check if the assistant recently presented a menu (look at last few messages)
-    has_menu_context = False
-    for msg in reversed(messages[-6:]):
-        if msg.get("role") == "assistant":
+    # Try to extract the field/table from the most recent assistant message
+    # that contained search results (the numbered table)
+    resolved_field = None
+    if row_num:
+        row_idx = int(row_num)
+        for msg in reversed(messages[-10:]):
+            if msg.get("role") != "assistant":
+                continue
             content = msg.get("content", "") or ""
-            if any(marker in content for marker in [
-                "Column lineage", "Transformation expression",
-                "Upstream lineage", "Downstream lineage",
-                "Impact analysis", "Lookup conditions",
-                "Reply with"
-            ]):
-                has_menu_context = True
+            if not content:
+                continue
+            # Look for table rows with row numbers: "| 3 | CRDM_DDM.TABLE.FIELD | ..."
+            # or "| #3 |" patterns
+            row_matches = re.findall(
+                r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z_][A-Z0-9_.]+)',
+                content
+            )
+            if row_matches:
+                resolved_field = row_matches[0]
                 break
 
-    if not has_menu_context:
-        return user_message
-
-    if row_num:
+    if resolved_field:
+        # Best case: we resolved the actual field from the table
+        rewritten = (
+            f"MENU SELECTION — do NOT call search_fields. "
+            f"The user selected field \"{resolved_field}\" (row #{row_num}) "
+            f"and action {action} ({action_desc}). "
+            f"Call the appropriate tool for action {action} using field/table \"{resolved_field}\". "
+            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
+        )
+    elif row_num:
         rewritten = (
             f"MENU SELECTION — do NOT call search_fields. "
             f"The user selected row #{row_num} from the search results table you displayed above, "
@@ -494,7 +507,7 @@ def _rewrite_menu_reply(user_message, messages):
             f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
         )
 
-    print(f"   [rewrite] '{user_message}' → menu selection: row={row_num}, action={action}")
+    print(f"   [rewrite] '{user_message}' → menu selection: row={row_num}, action={action}, resolved={resolved_field}")
     return rewritten
 
 
