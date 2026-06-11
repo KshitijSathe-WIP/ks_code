@@ -465,26 +465,36 @@ def _rewrite_menu_reply(user_message, messages):
     action = m.group(2).upper()
     action_desc = _MENU_ACTIONS.get(action, action)
 
-    # Try to extract the field/table from the most recent assistant message
-    # that contained search results (the numbered table)
+    # Try to extract the field/table ONLY from the most recent assistant message
+    # that presented the field options menu (contains "Reply with" and action letters).
+    # This prevents matching row numbers from earlier lineage result tables.
     resolved_field = None
-    if row_num:
+    menu_message_content = None
+
+    # Find the most recent assistant message that presented the options menu
+    for msg in reversed(messages[-10:]):
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content", "") or ""
+        if not content:
+            continue
+        # Must contain the menu markers to be the menu message
+        if "Reply with" in content and any(
+            marker in content for marker in ["Column lineage", "Transformation expression", "Upstream lineage"]
+        ):
+            menu_message_content = content
+            break
+
+    if row_num and menu_message_content:
         row_idx = int(row_num)
-        for msg in reversed(messages[-10:]):
-            if msg.get("role") != "assistant":
-                continue
-            content = msg.get("content", "") or ""
-            if not content:
-                continue
-            # Look for table rows with row numbers: "| 3 | CRDM_DDM.TABLE.FIELD | ..."
-            # or "| #3 |" patterns
-            row_matches = re.findall(
-                r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z_][A-Z0-9_.]+)',
-                content
-            )
-            if row_matches:
-                resolved_field = row_matches[0]
-                break
+        # Match table rows like: | 3 | CRDM_DDM.TABLE.FIELD | ...
+        # The id column (SCHEMA.TABLE.FIELD) appears right after the row number
+        row_matches = re.findall(
+            r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*)',
+            menu_message_content
+        )
+        if row_matches:
+            resolved_field = row_matches[0]
 
     if resolved_field:
         # Best case: we resolved the actual field from the table
