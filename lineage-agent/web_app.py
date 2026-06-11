@@ -379,10 +379,15 @@ When answering:
    - Names starting with "exp_" → "Expression transformation" — call get_edges_by_transformation_name
    - Names starting with "lkp_" → "Lookup transformation"      — call get_edges_by_transformation_name
    - Names starting with "fil_" → "Filter transformation"       — call get_edges_by_transformation_name
-   - Names starting with "upd_" → "Update Strategy transformation"   — call get_edges_by_transformation_name
+   - Names starting with "upd_" → "Update Strategy transformation" — call get_sql_and_filter_logic(mapping_name=<mapping>)
+     NOT get_edges_by_transformation_name. Update strategy info is stored at the edge level
+     (update_strategy_expression), not reliably as a chain step. You MUST extract the mapping_name
+     from the column lineage results first, then call get_sql_and_filter_logic with that mapping.
    - Names starting with "rtr_" → "Router transformation"            — call get_edges_by_transformation_name
-   When the user provides any name starting with exp_, lkp_, fil_, upd_, rtr_, or SQ_ as the subject of a query,
+   When the user provides any name starting with exp_, lkp_, fil_, or SQ_ as the subject of a query,
    call get_edges_by_transformation_name(transformation_name=<that name>) — do NOT call get_mapping_transformation_details.
+   When the user asks about a name starting with "upd_", extract the mapping_name from the lineage context
+   and call get_sql_and_filter_logic(mapping_name=<mapping>) instead.
    When a lookup query returns no results, say "There are no lookup conditions recorded for [table_name]" —
    do NOT reference the Source Qualifier or any transformation name in the no-results message.
 
