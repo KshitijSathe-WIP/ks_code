@@ -422,6 +422,10 @@ Formatting rules:
 
 sessions = {}
 
+# Stores the most recent search_fields results per session, indexed 1-based.
+# Structure: { session_id: [ {db_schema, table_name, field_name, layer, ...}, ... ] }
+_session_search_cache: dict[str, list] = {}
+
 
 def get_or_create_session(session_id=None):
     """Get existing session or create a new one."""
@@ -430,6 +434,33 @@ def get_or_create_session(session_id=None):
     new_id = str(uuid.uuid4())
     sessions[new_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     return new_id, sessions[new_id]
+
+
+def _cache_search_results(session_id: str, result_json: str):
+    """Parse search_fields JSON output and cache results 1-based for this session."""
+    try:
+        rows = json.loads(result_json)
+        if isinstance(rows, list) and rows:
+            _session_search_cache[session_id] = rows
+            print(f"   [cache] Stored {len(rows)} search results for session {session_id[:8]}")
+    except Exception:
+        pass
+
+
+def _resolve_field_from_cache(session_id: str, row_num: int) -> str | None:
+    """Return SCHEMA.TABLE.FIELD for the given 1-based row number, or None."""
+    rows = _session_search_cache.get(session_id)
+    if not rows or row_num < 1 or row_num > len(rows):
+        return None
+    r = rows[row_num - 1]
+    schema = r.get("db_schema", "")
+    table  = r.get("table_name", "")
+    field  = r.get("field_name", "")
+    if schema and table and field:
+        return f"{schema}.{table}.{field}"
+    if table and field:
+        return f"{table}.{field}"
+    return None
 
 
 # ────────────────────────────────────────────────────────────
@@ -450,7 +481,7 @@ _MENU_ACTIONS = {
 _MENU_REPLY_RE = re.compile(r'^\s*(\d+)?\s*([A-Ga-g])\s*$')
 
 
-def _rewrite_menu_reply(user_message, messages):
+def _rewrite_menu_reply(user_message, messages, session_id=None):
     """
     If user_message looks like a menu selection (e.g. '3 A', 'B'),
     rewrite it into an explicit instruction so the model cannot
@@ -465,36 +496,38 @@ def _rewrite_menu_reply(user_message, messages):
     action = m.group(2).upper()
     action_desc = _MENU_ACTIONS.get(action, action)
 
-    # Try to extract the field/table ONLY from the most recent assistant message
-    # that presented the field options menu (contains "Reply with" and action letters).
-    # This prevents matching row numbers from earlier lineage result tables.
     resolved_field = None
-    menu_message_content = None
 
-    # Find the most recent assistant message that presented the options menu
-    for msg in reversed(messages[-10:]):
-        if msg.get("role") != "assistant":
-            continue
-        content = msg.get("content", "") or ""
-        if not content:
-            continue
-        # Must contain the menu markers to be the menu message
-        if "Reply with" in content and any(
-            marker in content for marker in ["Column lineage", "Transformation expression", "Upstream lineage"]
-        ):
-            menu_message_content = content
-            break
+    # ── Primary: use server-side search results cache (100% reliable) ──
+    if row_num and session_id:
+        resolved_field = _resolve_field_from_cache(session_id, int(row_num))
+        if resolved_field:
+            print(f"   [rewrite] '{user_message}' → cache hit: row={row_num}, field={resolved_field}, action={action}")
 
-    if row_num and menu_message_content:
-        row_idx = int(row_num)
-        # Match table rows like: | 3 | CRDM_DDM.TABLE.FIELD | ...
-        # The id column (SCHEMA.TABLE.FIELD) appears right after the row number
-        row_matches = re.findall(
-            r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*)',
-            menu_message_content
-        )
-        if row_matches:
-            resolved_field = row_matches[0]
+    # ── Fallback: parse the menu message markdown (only if cache miss) ──
+    if not resolved_field:
+        menu_message_content = None
+        for msg in reversed(messages[-10:]):
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content", "") or ""
+            if not content:
+                continue
+            if "Reply with" in content and any(
+                marker in content for marker in ["Column lineage", "Transformation expression", "Upstream lineage"]
+            ):
+                menu_message_content = content
+                break
+
+        if row_num and menu_message_content:
+            row_idx = int(row_num)
+            row_matches = re.findall(
+                r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*)',
+                menu_message_content
+            )
+            if row_matches:
+                resolved_field = row_matches[0]
+                print(f"   [rewrite] '{user_message}' → markdown fallback: row={row_num}, field={resolved_field}, action={action}")
 
     if resolved_field:
         # Best case: we resolved the actual field from the table
@@ -531,12 +564,17 @@ def _rewrite_menu_reply(user_message, messages):
 # CHAT LOGIC (same as CLI)
 # ────────────────────────────────────────────────────────────
 
-def chat(messages):
+_current_session_id = None  # set before each chat() call so tool hooks can reference it
+
+
+def chat(messages, session_id=None):
     """
     Send messages to the model. If the model requests tool calls,
     execute them and continue until a final text response is produced.
     Returns (response_text, tool_calls_log).
     """
+    global _current_session_id
+    _current_session_id = session_id
     tool_calls_log = []
     max_rounds = 10  # prevent infinite loops
 
@@ -598,6 +636,9 @@ def chat(messages):
                     log_entry["status"] = "success"
                     log_entry["result_length"] = len(result)
                     print(f"   [chat]    ✅ {func_name} returned {len(result)} chars")
+                    # Cache search_fields results for deterministic menu reply resolution
+                    if func_name == "search_fields" and _current_session_id:
+                        _cache_search_results(_current_session_id, result)
                 except Exception as e:
                     result = json.dumps({"error": str(e), "function": func_name})
                     log_entry["status"] = "error"
@@ -648,13 +689,13 @@ def api_chat():
     session_id, messages = get_or_create_session(session_id)
 
     # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message = _rewrite_menu_reply(user_message, messages)
+    user_message = _rewrite_menu_reply(user_message, messages, session_id)
 
     messages.append({"role": "user", "content": user_message})
 
     try:
         print(f"\n📨 User: {user_message[:80]}...")
-        response_text, tool_calls_log = chat(messages)
+        response_text, tool_calls_log = chat(messages, session_id=session_id)
         print(f"📤 Response sent ({len(response_text)} chars)\n")
         return jsonify({
             "session_id": session_id,
@@ -684,7 +725,7 @@ def new_session():
 _DONE = object()  # sentinel
 
 
-def _execute_tool_call(func_name, func_args):
+def _execute_tool_call(func_name, func_args, session_id=None):
     """Execute a single tool call. Returns (result_str, log_entry)."""
     log_entry = {"function": func_name, "args": func_args}
     if func_name in FUNCTION_REGISTRY:
@@ -696,6 +737,9 @@ def _execute_tool_call(func_name, func_args):
             log_entry["status"] = "success"
             log_entry["result_length"] = len(result)
             print(f"   [stream]    ✅ {func_name} returned {len(result)} chars")
+            # Cache search_fields results for deterministic menu reply resolution
+            if func_name == "search_fields" and session_id:
+                _cache_search_results(session_id, result)
         except Exception as e:
             result = json.dumps({"error": str(e), "function": func_name})
             log_entry["status"] = "error"
@@ -708,7 +752,7 @@ def _execute_tool_call(func_name, func_args):
     return result, log_entry
 
 
-def _agent_worker(messages, q):
+def _agent_worker(messages, q, session_id=None):
     """
     Background thread: runs the full model+tool loop and puts SSE event
     dicts onto q. Puts _DONE sentinel when finished.
@@ -790,7 +834,7 @@ def _agent_worker(messages, q):
                         messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
                         continue
 
-                    result, log_entry = _execute_tool_call(func_name, func_args)
+                    result, log_entry = _execute_tool_call(func_name, func_args, session_id=session_id)
                     all_tool_calls_log.append(log_entry)
                     messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
@@ -829,7 +873,7 @@ def api_chat_stream():
     session_id, messages = get_or_create_session(session_id)
 
     # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message = _rewrite_menu_reply(user_message, messages)
+    user_message = _rewrite_menu_reply(user_message, messages, session_id)
 
     messages.append({"role": "user", "content": user_message})
 
@@ -842,7 +886,7 @@ def api_chat_stream():
         q = queue.Queue()
 
         # Start agent work in background thread
-        t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
+        t = threading.Thread(target=_agent_worker, args=(messages, q, session_id), daemon=True)
         t.start()
 
         # Yield events as they arrive; send SSE comment keepalives while waiting
