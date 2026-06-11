@@ -236,6 +236,27 @@
         .tool-call-status.success { color: var(--success); }
         .tool-call-status.error { color: var(--error); }
 
+        .tool-source-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+            vertical-align: middle;
+            letter-spacing: 0.3px;
+        }
+        .tool-source-badge.neo4j {
+            background: #1a6644;
+            color: #a8ffcb;
+            border: 1px solid #2e9e6a;
+        }
+        .tool-source-badge.cosmos {
+            background: #1a3a66;
+            color: #a8caff;
+            border: 1px solid #2e64cc;
+        }
+
         /* Typing indicator */
         .typing-indicator {
             display: none;
@@ -754,6 +775,25 @@
             container.scrollTop = container.scrollHeight;
         }
 
+        const NEO4J_TOOLS = new Set([
+            'query_upstream_lineage', 'query_downstream_lineage', 'query_column_lineage',
+            'query_cross_layer_path', 'query_impact_analysis', 'query_tables_by_layer',
+            'search_fields', 'run_custom_cypher'
+        ]);
+        const COSMOS_TOOLS = new Set([
+            'get_edge_transformation_details', 'get_field_transformation_logic',
+            'get_mapping_transformation_details', 'get_lookup_details_for_table',
+            'get_sql_and_filter_logic', 'get_edges_by_transformation_name'
+        ]);
+
+        function getToolSourceBadge(funcName) {
+            if (NEO4J_TOOLS.has(funcName))
+                return '<span class="tool-source-badge neo4j">Neo4j</span>';
+            if (COSMOS_TOOLS.has(funcName))
+                return '<span class="tool-source-badge cosmos">Cosmos DB</span>';
+            return '';
+        }
+
         function appendToolCalls(msgDiv, toolCalls) {
             const details = document.createElement('details');
             details.className = 'tool-calls';
@@ -766,6 +806,7 @@
                 item.className = 'tool-call-item';
                 item.innerHTML = `
                     <span class="tool-call-name">${escapeHtml(tc.function)}</span>
+                    ${getToolSourceBadge(tc.function)}
                     <span class="tool-call-status ${tc.status}">${tc.status === 'success' ? '✓' : '✗'}</span>
                     <div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">
                         ${escapeHtml(JSON.stringify(tc.args))}
@@ -809,6 +850,7 @@
                     item.className = 'tool-call-item';
                     item.innerHTML = `
                         <span class="tool-call-name">${escapeHtml(tc.function)}</span>
+                        ${getToolSourceBadge(tc.function)}
                         <span class="tool-call-status ${tc.status}">${tc.status === 'success' ? '✓' : '✗'}</span>
                         <div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">
                             ${escapeHtml(JSON.stringify(tc.args))}
