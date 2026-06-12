@@ -201,10 +201,9 @@ CRITICAL EXECUTION RULE — NEVER narrate, ALWAYS act:
 - If you need to explain your approach, do so AFTER the tool results are returned, not before.
 
 INPUT PARSING RULES:
-- MENU REPLIES: If the user's message matches a menu selection pattern (a digit + letter like "1A", "1 A", "2B",
-  or a single letter like "A", "B"), it is ALWAYS a response to the options menu you just presented.
-  NEVER pass such replies to search_fields or any other tool. Instead, resolve the row number and action
-  letter from the conversation context and call the appropriate tool with the previously identified field/table.
+- MENU REPLIES: When the user replies with a field id (SCHEMA.TABLE.FIELD or TABLE.FIELD) followed by an action letter
+  (e.g. `CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR A`), extract the field and the action letter and call the appropriate tool.
+  NEVER pass such replies to search_fields.
 - For table-based tools (query_upstream_lineage, query_downstream_lineage, query_cross_layer_path, query_impact_analysis): pass ONLY the bare table name — never include the schema prefix. "SHAW_TPR.MAST_LOAN_REC" → pass "MAST_LOAN_REC". The functions handle schema-prefixed input automatically, but bare names are preferred.
 - For query_column_lineage: if the user provides a three-part dotted reference like CRDM_DDM.F_ACCOUNTS.SOURCE_KEY, pass the entire string as field_name (leave table_name empty). If only TABLE.FIELD is given, split into table_name and field_name.
 - NEVER pass a two-part SCHEMA.TABLE value as a table name to any tool — always use just the TABLE part.
@@ -254,17 +253,11 @@ STEP 1 — Identify the input type before presenting any options:
 STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
 
   2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
-     - If search returned multiple matches: each result already has a "row" field — use THAT number as the row number in the FIRST column.
-       Do NOT renumber or reorder the results. Display them in the EXACT order returned by the tool.
-       The table MUST have a "#" column as the leftmost column. Example:
-       | # | id | table_name | layer | data_type |
-       |---|---|---|---|---|
-       | 1 | CRDM_TMP.TT_X.FIELD | TT_X | TT | varchar |
-       | 2 | CRDM_DDM.F_X.FIELD | F_X | DDM | varchar |
-       CRITICAL: The "#" column MUST match the "row" field from the JSON. Do NOT sort, group, or reorder rows.
-       NEVER omit the row numbers — the user needs them to make a selection.
-       If only one match was found, skip the row numbering — the field is already confirmed.
-     - Then show the action menu ONCE, directly below the results table:
+     - If search returned multiple matches: display results as a simple numbered list showing the full field id (SCHEMA.TABLE.FIELD) and layer.
+       Example:
+         1. CRDM_TMP.TT_F_PARTICIPANTS.CUST_NTE_NBR  (layer: TT)
+         2. CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR     (layer: DDM)
+     - Then show the action menu ONCE, directly below the results list:
 
        "What would you like to know?
         A  Column lineage           — full transformation path across all hops
@@ -275,8 +268,8 @@ STEP 2 — Present the relevant option set and WAIT for the user's reply before 
         F  Impact analysis           — blast radius if the field's table changes
         G  SQL / filter / update strategy — mapping will be identified first"
 
-     - Ask: "Reply with [row number if multiple matches] + letter — e.g. `2 A` or just `B` if there is only one match."
-     - Do NOT ask the user to retype the field id. Use the row number to look up the id internally.
+     - Ask: "Please type the field (e.g. `SCHEMA.TABLE.FIELD`) and the action letter (e.g. `A`), separated by a space."
+     - Example valid replies: `CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR A` or `D_LOAN_ACCOUNT.CUST_NTE_NBR B`
 
   2B. TABLE LEVEL OPTIONS — use when a table name has been identified (no field match found):
      "What would you like to know about **[table_name]**?
@@ -424,10 +417,6 @@ Formatting rules:
 
 sessions = {}
 
-# Stores the most recent search_fields results per session, indexed 1-based.
-# Structure: { session_id: [ {db_schema, table_name, field_name, layer, ...}, ... ] }
-_session_search_cache: dict[str, list] = {}
-
 
 def get_or_create_session(session_id=None):
     """Get existing session or create a new one."""
@@ -438,184 +427,16 @@ def get_or_create_session(session_id=None):
     return new_id, sessions[new_id]
 
 
-def _cache_search_results(session_id: str, result_json: str) -> str:
-    """
-    Parse search_fields JSON, inject 1-based 'row' numbers into each item,
-    cache the indexed results, and return the modified JSON string.
-    The row numbers force the model to present results in our order.
-    """
-    try:
-        rows = json.loads(result_json)
-        if isinstance(rows, list) and rows:
-            for i, r in enumerate(rows):
-                r["row"] = i + 1  # inject 1-based row number
-            _session_search_cache[session_id] = rows
-            print(f"   [cache] Stored {len(rows)} search results for session {session_id[:8]}")
-            return json.dumps(rows, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-    return result_json
-
-
-def _resolve_field_from_cache(session_id: str, row_num: int) -> str | None:
-    """Return SCHEMA.TABLE.FIELD for the given 1-based row number, or None."""
-    rows = _session_search_cache.get(session_id)
-    if not rows or row_num < 1 or row_num > len(rows):
-        return None
-    r = rows[row_num - 1]
-    schema = r.get("db_schema", "")
-    table  = r.get("table_name", "")
-    field  = r.get("field_name", "")
-    if schema and table and field:
-        return f"{schema}.{table}.{field}"
-    if table and field:
-        return f"{table}.{field}"
-    return None
-
-
-def _build_menu_tool_call(action: str, resolved_field: str) -> dict | None:
-    """
-    Map a menu action letter + resolved SCHEMA.TABLE.FIELD to a direct
-    tool call dict {func_name, func_args}, or None if not mappable.
-    """
-    parts = resolved_field.split(".")
-    table = parts[1] if len(parts) == 3 else (parts[0] if len(parts) == 2 else None)
-    if not table:
-        return None
-
-    mapping = {
-        "A": ("query_column_lineage",           {"field_name": resolved_field, "table_name": ""}),
-        "B": ("get_field_transformation_logic",  {"field_id": resolved_field}),
-        "C": ("get_lookup_details_for_table",    {"table_name": table}),
-        "D": ("query_upstream_lineage",          {"table_name": table}),
-        "E": ("query_downstream_lineage",        {"table_name": table}),
-        "F": ("query_impact_analysis",           {"table_name": table}),
-        # G needs mapping context, model handles it
-    }
-    if action not in mapping:
-        return None
-    func_name, func_args = mapping[action]
-    return {"func_name": func_name, "func_args": func_args}
-
-
-# ────────────────────────────────────────────────────────────
-# MENU REPLY REWRITER
-# ────────────────────────────────────────────────────────────
-
-_MENU_ACTIONS = {
-    "A": "Column lineage — full transformation path across all hops",
-    "B": "Transformation expression — how the field is derived",
-    "C": "Lookup conditions — lookup transformations applied to the field's table",
-    "D": "Upstream lineage — what tables feed into the field's table",
-    "E": "Downstream lineage — what tables the field's table feeds into",
-    "F": "Impact analysis — blast radius if the field's table changes",
-    "G": "SQL / filter / update strategy — mapping will be identified first",
-}
-
-# Matches: "1A", "1 A", "3a", "12 B", "A", "b", etc.
-_MENU_REPLY_RE = re.compile(r'^\s*(\d+)?\s*([A-Ga-g])\s*$')
-
-
-def _rewrite_menu_reply(user_message, messages, session_id=None):
-    """
-    If user_message looks like a menu selection (e.g. '3 A', 'B'),
-    rewrite it into an explicit instruction so the model cannot
-    misinterpret it as a search query.
-    Returns (rewritten_message, direct_call_info_or_None).
-    When direct_call_info is not None, the caller should execute the tool
-    directly and inject the result into messages before calling the model.
-    """
-    m = _MENU_REPLY_RE.match(user_message)
-    if not m:
-        return user_message, None
-
-    row_num = m.group(1)  # may be None
-    action = m.group(2).upper()
-    action_desc = _MENU_ACTIONS.get(action, action)
-
-    resolved_field = None
-    direct_call = None
-
-    # ── Primary: use server-side search results cache (100% reliable) ──
-    if row_num and session_id:
-        resolved_field = _resolve_field_from_cache(session_id, int(row_num))
-        if resolved_field:
-            print(f"   [rewrite] '{user_message}' → cache hit: row={row_num}, field={resolved_field}, action={action}")
-            direct_call = _build_menu_tool_call(action, resolved_field)
-            if direct_call:
-                print(f"   [rewrite] → direct tool call: {direct_call['func_name']}({direct_call['func_args']})")
-
-    # ── Fallback: parse the menu message markdown (only if cache miss) ──
-    if not resolved_field:
-        menu_message_content = None
-        for msg in reversed(messages[-10:]):
-            if msg.get("role") != "assistant":
-                continue
-            content = msg.get("content", "") or ""
-            if not content:
-                continue
-            if "Reply with" in content and any(
-                marker in content for marker in ["Column lineage", "Transformation expression", "Upstream lineage"]
-            ):
-                menu_message_content = content
-                break
-
-        if row_num and menu_message_content:
-            row_idx = int(row_num)
-            row_matches = re.findall(
-                r'\|\s*#?' + str(row_idx) + r'\s*\|\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*)',
-                menu_message_content
-            )
-            if row_matches:
-                resolved_field = row_matches[0]
-                print(f"   [rewrite] '{user_message}' → markdown fallback: row={row_num}, field={resolved_field}, action={action}")
-                direct_call = _build_menu_tool_call(action, resolved_field)
-
-    if resolved_field:
-        rewritten = (
-            f"MENU SELECTION — do NOT call search_fields. "
-            f"The user selected field \"{resolved_field}\" (row #{row_num}) "
-            f"and action {action} ({action_desc}). "
-            f"Call the appropriate tool for action {action} using field/table \"{resolved_field}\". "
-            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
-        )
-    elif row_num:
-        rewritten = (
-            f"MENU SELECTION — do NOT call search_fields. "
-            f"The user selected row #{row_num} from the search results table you displayed above, "
-            f"and action {action} ({action_desc}). "
-            f"Look up the field id from row #{row_num} in the results table in your previous message, "
-            f"then call the appropriate tool for action {action} using that resolved field/table. "
-            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
-        )
-    else:
-        rewritten = (
-            f"MENU SELECTION — do NOT call search_fields. "
-            f"The user selected action {action} ({action_desc}). "
-            f"There was only one match in your previous results, so use that field/table. "
-            f"Call the appropriate tool for action {action} using the field/table from your previous message. "
-            f"Do NOT pass \"{user_message}\" to search_fields or any tool as a search term."
-        )
-
-    print(f"   [rewrite] '{user_message}' → menu selection: row={row_num}, action={action}, resolved={resolved_field}")
-    return rewritten, direct_call
-
-
 # ────────────────────────────────────────────────────────────
 # CHAT LOGIC (same as CLI)
 # ────────────────────────────────────────────────────────────
 
-_current_session_id = None  # set before each chat() call so tool hooks can reference it
-
-
-def chat(messages, session_id=None):
+def chat(messages):
     """
     Send messages to the model. If the model requests tool calls,
     execute them and continue until a final text response is produced.
     Returns (response_text, tool_calls_log).
     """
-    global _current_session_id
-    _current_session_id = session_id
     tool_calls_log = []
     max_rounds = 10  # prevent infinite loops
 
@@ -677,9 +498,6 @@ def chat(messages, session_id=None):
                     log_entry["status"] = "success"
                     log_entry["result_length"] = len(result)
                     print(f"   [chat]    ✅ {func_name} returned {len(result)} chars")
-                    # Cache search_fields results and inject row numbers
-                    if func_name == "search_fields" and _current_session_id:
-                        result = _cache_search_results(_current_session_id, result)
                 except Exception as e:
                     result = json.dumps({"error": str(e), "function": func_name})
                     log_entry["status"] = "error"
@@ -729,39 +547,11 @@ def api_chat():
     session_id = data.get("session_id")
     session_id, messages = get_or_create_session(session_id)
 
-    # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message, direct_call = _rewrite_menu_reply(user_message, messages, session_id)
-
     messages.append({"role": "user", "content": user_message})
-
-    # ── Direct tool execution for cache-resolved menu selections ──
-    tool_calls_log = []
-    if direct_call:
-        func_name = direct_call["func_name"]
-        func_args = direct_call["func_args"]
-        try:
-            print(f"   [direct] Executing {func_name}({func_args})")
-            result = FUNCTION_REGISTRY[func_name](**func_args)
-            if result is None:
-                result = json.dumps({"result": "No data returned"})
-            tool_calls_log.append({"function": func_name, "args": func_args, "status": "success", "result_length": len(result)})
-        except Exception as e:
-            result = json.dumps({"error": str(e), "function": func_name})
-            tool_calls_log.append({"function": func_name, "args": func_args, "status": "error", "error": str(e)})
-        # Inject synthetic tool call + result so the model only formats
-        tc_id = f"menu_{uuid.uuid4().hex[:12]}"
-        messages.append({
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [{"id": tc_id, "type": "function",
-                            "function": {"name": func_name, "arguments": json.dumps(func_args)}}],
-        })
-        messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
 
     try:
         print(f"\n📨 User: {user_message[:80]}...")
-        response_text, extra_tool_calls = chat(messages, session_id=session_id)
-        tool_calls_log.extend(extra_tool_calls)
+        response_text, tool_calls_log = chat(messages)
         print(f"📤 Response sent ({len(response_text)} chars)\n")
         return jsonify({
             "session_id": session_id,
@@ -791,7 +581,7 @@ def new_session():
 _DONE = object()  # sentinel
 
 
-def _execute_tool_call(func_name, func_args, session_id=None):
+def _execute_tool_call(func_name, func_args):
     """Execute a single tool call. Returns (result_str, log_entry)."""
     log_entry = {"function": func_name, "args": func_args}
     if func_name in FUNCTION_REGISTRY:
@@ -803,9 +593,6 @@ def _execute_tool_call(func_name, func_args, session_id=None):
             log_entry["status"] = "success"
             log_entry["result_length"] = len(result)
             print(f"   [stream]    ✅ {func_name} returned {len(result)} chars")
-            # Cache search_fields results and inject row numbers
-            if func_name == "search_fields" and session_id:
-                result = _cache_search_results(session_id, result)
         except Exception as e:
             result = json.dumps({"error": str(e), "function": func_name})
             log_entry["status"] = "error"
@@ -818,7 +605,7 @@ def _execute_tool_call(func_name, func_args, session_id=None):
     return result, log_entry
 
 
-def _agent_worker(messages, q, session_id=None):
+def _agent_worker(messages, q):
     """
     Background thread: runs the full model+tool loop and puts SSE event
     dicts onto q. Puts _DONE sentinel when finished.
@@ -900,7 +687,7 @@ def _agent_worker(messages, q, session_id=None):
                         messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
                         continue
 
-                    result, log_entry = _execute_tool_call(func_name, func_args, session_id=session_id)
+                    result, log_entry = _execute_tool_call(func_name, func_args)
                     all_tool_calls_log.append(log_entry)
                     messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
 
@@ -938,33 +725,7 @@ def api_chat_stream():
     session_id = data.get("session_id")
     session_id, messages = get_or_create_session(session_id)
 
-    # Rewrite menu replies (e.g. "3 A") into explicit instructions
-    user_message, direct_call = _rewrite_menu_reply(user_message, messages, session_id)
-
     messages.append({"role": "user", "content": user_message})
-
-    # ── Pre-execute direct tool call if resolved from cache ──
-    direct_tool_log = None
-    if direct_call:
-        func_name = direct_call["func_name"]
-        func_args = direct_call["func_args"]
-        try:
-            print(f"   [direct] Executing {func_name}({func_args})")
-            result = FUNCTION_REGISTRY[func_name](**func_args)
-            if result is None:
-                result = json.dumps({"result": "No data returned"})
-            direct_tool_log = [{"function": func_name, "args": func_args, "status": "success", "result_length": len(result)}]
-        except Exception as e:
-            result = json.dumps({"error": str(e), "function": func_name})
-            direct_tool_log = [{"function": func_name, "args": func_args, "status": "error", "error": str(e)}]
-        tc_id = f"menu_{uuid.uuid4().hex[:12]}"
-        messages.append({
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [{"id": tc_id, "type": "function",
-                            "function": {"name": func_name, "arguments": json.dumps(func_args)}}],
-        })
-        messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
 
     def generate():
         print(f"\n📨 [stream] User: {user_message[:80]}...")
@@ -972,14 +733,10 @@ def api_chat_stream():
         # Send session id immediately
         yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
-        # If we pre-executed a tool call, emit the tool event immediately
-        if direct_tool_log:
-            yield f"data: {json.dumps({'type': 'tools', 'tool_calls': direct_tool_log})}\n\n"
-
         q = queue.Queue()
 
         # Start agent work in background thread
-        t = threading.Thread(target=_agent_worker, args=(messages, q, session_id), daemon=True)
+        t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
         t.start()
 
         # Yield events as they arrive; send SSE comment keepalives while waiting
