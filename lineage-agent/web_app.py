@@ -253,11 +253,13 @@ STEP 1 — Identify the input type before presenting any options:
 STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
 
   2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
-     - If search returned multiple matches: display results as a simple numbered list showing the full field id (SCHEMA.TABLE.FIELD) and layer.
+     - If search returned multiple matches: display results as a Markdown table with columns #, Field ID, Layer, Data Type.
        Example:
-         1. CRDM_TMP.TT_F_PARTICIPANTS.CUST_NTE_NBR  (layer: TT)
-         2. CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR     (layer: DDM)
-     - Then show the action menu ONCE, directly below the results list:
+         | # | Field ID | Layer | Data Type |
+         |---|----------|-------|-----------|
+         | 1 | CRDM_TMP.TT_F_PARTICIPANTS.CUST_NTE_NBR | TT | string |
+         | 2 | CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR | DDM | string |
+     - Then show the action menu ONCE, directly below the results table:
 
        "What would you like to know?
         A  Column lineage           — full transformation path across all hops
