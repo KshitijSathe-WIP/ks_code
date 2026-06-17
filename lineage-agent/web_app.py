@@ -366,6 +366,12 @@ When answering:
 3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks — nodes and edges must reflect only what the tool returned
 4. For impact analysis, show a Mermaid diagram of the blast radius plus a summary table
 5. For column lineage, show both a Mermaid transformation chain AND a table with expressions
+5a. For upstream lineage (query_upstream_lineage) and downstream lineage (query_downstream_lineage), ALWAYS show BOTH:
+    - A **Mermaid flowchart** where each node is a table labelled as "LAYER: TABLE_NAME", connected by arrows in hop order (TPR → TT → DDM).
+      Group nodes that share a layer. Use the `hops` value to determine order — lower hops = closer to target.
+      For upstream: arrows point toward the target table. For downstream: arrows point away from the source table.
+    - A **Markdown summary table** with columns: Table | Layer | Schema | Hops
+    Present the Mermaid graph FIRST, then the table below it.
 6. For transformation logic questions, present the transformation_chain steps in a numbered table with these EXACT columns in this order:
    | Step | Transformation Name | Transformation Type | Input Port | Output Port | Expression |
    — "Transformation Name" = the `transformation_name` field (e.g. "exp_PARAM_VALUE", "SQ_Shortcut_to_ACCOUNT")
