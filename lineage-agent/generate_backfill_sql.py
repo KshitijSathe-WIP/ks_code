@@ -254,11 +254,20 @@ class BackfillSQLGenerator:
         ctes = []
         final_mapping = mappings_ordered[-1] if mappings_ordered else None
 
+        # Maps bare target-table name → CTE name that produces it.
+        # Each subsequent CTE whose FROM table is already produced by a prior CTE
+        # will read from that CTE (aliased as the original table name) instead of
+        # the physical table, so the full pipeline is chained end-to-end.
+        prior_cte_by_table: dict = {}
+
         for i, mapping_name in enumerate(mappings_ordered):
             edges = mapping_edges[mapping_name]
             cosmos_doc = self._get_cosmos_for_edge(edges[0])
-            cte = self._build_mapping_cte(mapping_name, edges, cosmos_doc, i)
+            cte = self._build_mapping_cte(mapping_name, edges, cosmos_doc, i, prior_cte_by_table)
             if cte:
+                # Register every target table this CTE produces
+                for e in edges:
+                    prior_cte_by_table[e["to_table"].upper()] = cte["name"]
                 ctes.append(cte)
 
         if not ctes:
@@ -282,7 +291,8 @@ class BackfillSQLGenerator:
 
         return "\n".join(sql_lines)
 
-    def _build_mapping_cte(self, mapping_name: str, edges: list, cosmos_doc: dict | None, index: int) -> dict | None:
+    def _build_mapping_cte(self, mapping_name: str, edges: list, cosmos_doc: dict | None, index: int,
+                            prior_cte_by_table: dict | None = None) -> dict | None:
         """Build one CTE representing a single mapping's transformation logic."""
         # Determine source and target tables from edges
         source_tables = set()
@@ -316,9 +326,15 @@ class BackfillSQLGenerator:
                 select_items.append(f"    {alias}")
         body_lines.append(",\n".join(select_items))
 
-        # FROM clause — use the driving table identified from join conditions
+        # FROM clause — use the driving table identified from join conditions.
+        # If a prior CTE already produced this table, read from that CTE and alias
+        # it as the original bare table name so existing column references stay valid.
         from_table = self._find_driving_table(cosmos_doc, source_tables)
-        body_lines.append(f"FROM {from_table}")
+        from_bare  = from_table.split('.')[-1].upper()
+        if prior_cte_by_table and from_bare in prior_cte_by_table:
+            body_lines.append(f"FROM {prior_cte_by_table[from_bare]} AS {from_bare}")
+        else:
+            body_lines.append(f"FROM {from_table}")
 
         # JOIN clauses (from lookup conditions and join conditions in Cosmos)
         joins = self._extract_joins(cosmos_doc, source_tables, from_table=from_table)
