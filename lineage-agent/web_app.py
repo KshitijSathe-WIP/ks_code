@@ -136,6 +136,15 @@ def init_tools():
     except Exception as e:
         print(f"   ⚠️  Cosmos tools unavailable (continuing without them): {e}")
 
+    try:
+        import backfill_sql_tool as bst
+        FUNCTION_REGISTRY.update({
+            "generate_backfill_sql_for_field": bst.generate_backfill_sql_for_field,
+        })
+        print("   ✅ Backfill SQL tool loaded")
+    except Exception as e:
+        print(f"   ⚠️  Backfill SQL tool unavailable (continuing without it): {e}")
+
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
     TOOLS_LOADED = True
     return True
@@ -221,6 +230,8 @@ EXPLICIT INTENT SHORTCUT — skip the menu entirely when BOTH the action AND the
     "upstream lineage of F_PARTICIPANTS"                    → call query_upstream_lineage("F_PARTICIPANTS")
     "trace CUSTOMER_KEY from TPR to DDM"                    → call query_column_lineage("CUSTOMER_KEY")
     "show transformation logic for CRDM_DDM.F_ACCOUNTS.AMT" → call get_field_transformation_logic(...)
+    "generate backfill SQL for F_PARTICIPANTS.CUSTOMER_KEY" → call generate_backfill_sql_for_field("F_PARTICIPANTS.CUSTOMER_KEY")
+    "write SQL to populate CRDM_DDM.F_ACCOUNTS.SOURCE_KEY"  → call generate_backfill_sql_for_field("CRDM_DDM.F_ACCOUNTS.SOURCE_KEY")
 
   FIELD-LEVEL IMPACT — when the user asks about impact of a specific FIELD (e.g. "what is impacted if TABLE.FIELD fails"):
     You MUST call BOTH tools in the same response:
@@ -268,7 +279,8 @@ STEP 2 — Present the relevant option set and WAIT for the user's reply before 
         D  Upstream lineage          — what tables feed into the field's table
         E  Downstream lineage        — what tables the field's table feeds into
         F  Impact analysis           — blast radius if the field's table changes
-        G  SQL / filter / update strategy — mapping will be identified first"
+        G  SQL / filter / update strategy — mapping will be identified first
+        H  Backfill SQL              — generate a CTE-based SQL query to populate this field"
 
      - Ask: "Please type the field (e.g. `SCHEMA.TABLE.FIELD`) and the action letter (e.g. `A`), separated by a space."
      - Example valid replies: `CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR A` or `D_LOAN_ACCOUNT.CUST_NTE_NBR B`
@@ -306,7 +318,7 @@ STEP 3 — MENU REPLY PARSING (CRITICAL — read carefully):
     • The LETTER = the action from the menu
   - Then execute the action below using the RESOLVED field id or table name — NOT the raw reply text.
 
-  Field level (options A–G):
+  Field level (options A–H):
   - A: query_column_lineage(field_name=<resolved field id>)
   - B: get_field_transformation_logic(field_id=<resolved field id>)
   - C: get_lookup_details_for_table(table_name=<table part of resolved field id>)
@@ -315,6 +327,7 @@ STEP 3 — MENU REPLY PARSING (CRITICAL — read carefully):
   - F: query_impact_analysis(table_name=<table part of resolved field id>)
   - G: call query_column_lineage first → extract distinct mapping_names → present as a numbered list →
        ask "Which mapping? Reply with the number." → call get_sql_and_filter_logic(mapping_name=<chosen>)
+  - H: generate_backfill_sql_for_field(field_id=<resolved field id>)
 
   Table level (options A–E):
   - A: query_upstream_lineage(table_name=<table_name>)
@@ -354,6 +367,10 @@ TOOL SELECTION GUIDE — use the right tool for the right question:
                                           (use whenever the user provides a step-level name: exp_, lkp_, fil_, upd_, SQ_)
   - get_edge_transformation_details     → "show the complete step-by-step logic for this specific edge"
                                           (use when you already have the exact edge_id)
+  - generate_backfill_sql_for_field     → "generate backfill SQL for field X"
+                                          "write SQL to populate / derive / load SCHEMA.TABLE.FIELD"
+                                          "how would I insert data into X"
+                                          (returns a CTE-based SQL statement; present it in a ```sql code block)
 
   COMBINATION PATTERN — for deep field questions:
   1. Call query_column_lineage to find the edge topology and mapping names
@@ -378,6 +395,8 @@ When answering:
    — "Transformation Type" = the `transformation_type` field (e.g. "Expression", "Source Qualifier")
    — Never omit or merge the Transformation Name column. Every row must show the transformation_name value.
 7. For lookup/SQL/filter questions, highlight the relevant condition in a dedicated code block
+7a. For backfill SQL (generate_backfill_sql_for_field), always present the full SQL inside a ```sql code block
+    followed by a short note: "Review expressions and replace any $$VARIABLE placeholders before executing."
 8. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
 9. TERMINOLOGY — use the correct term based on the name pattern:
    - Names starting with "m_"   → "mapping"  (e.g. m_TMP_to_DDM_F_PARTICIPANTS)
@@ -738,39 +757,52 @@ def api_chat_stream():
     def generate():
         print(f"\n📨 [stream] User: {user_message[:80]}...")
 
-        # Send session id immediately
-        yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+        try:
+            # Send session id immediately
+            yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
-        q = queue.Queue()
+            q = queue.Queue()
 
-        # Start agent work in background thread
-        t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
-        t.start()
+            # Start agent work in background thread
+            t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
+            t.start()
 
-        # Yield events as they arrive; send SSE comment keepalives while waiting
-        # so Flask flushes HTTP chunks and the browser sees activity immediately
-        while True:
-            try:
-                item = q.get(timeout=1.0)
-            except queue.Empty:
-                # Keepalive comment — forces Werkzeug to flush this HTTP chunk
-                yield ": keepalive\n\n"
-                continue
+            # Yield events as they arrive; send SSE comment keepalives while waiting
+            # so Flask flushes HTTP chunks and the browser sees activity immediately
+            while True:
+                try:
+                    item = q.get(timeout=1.0)
+                except queue.Empty:
+                    # Keepalive comment — forces Werkzeug to flush this HTTP chunk
+                    yield ": keepalive\n\n"
+                    continue
 
-            if item is _DONE:
-                break
+                if item is _DONE:
+                    break
 
-            yield f"data: {json.dumps(item)}\n\n"
+                yield f"data: {json.dumps(item)}\n\n"
 
-            if item.get("type") in ("done", "error"):
-                break
+                if item.get("type") in ("done", "error"):
+                    break
 
-        # Clean up on error: remove dangling user message
-        if messages and messages[-1].get("role") == "user":
-            messages.pop()
+        except Exception as exc:
+            # Send a proper error event before closing — prevents ERR_HTTP2_PROTOCOL_ERROR
+            # caused by the stream closing abruptly without a terminal event
+            print(f"  ❌ [stream] generator exception: {exc}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
+
+        finally:
+            # Clean up on error: remove dangling user message
+            if messages and messages[-1].get("role") == "user":
+                messages.pop()
 
     return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+                    headers={
+                        "Cache-Control": "no-cache, no-transform",
+                        "X-Accel-Buffering": "no",
+                        "Connection": "keep-alive",
+                        "Content-Type": "text/event-stream; charset=utf-8",
+                    })
 
 
 @app.route("/api/health", methods=["GET"])
@@ -915,4 +947,4 @@ if __name__ == "__main__":
     print("   Server will auto-shutdown when browser is closed.")
     print("=" * 60 + "\n")
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
