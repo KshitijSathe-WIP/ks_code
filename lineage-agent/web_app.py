@@ -136,9 +136,22 @@ def init_tools():
     except Exception as e:
         print(f"   ⚠️  Cosmos tools unavailable (continuing without them): {e}")
 
+    try:
+        import backfill_sql_tool as bst
+        FUNCTION_REGISTRY.update({
+            "generate_backfill_sql_for_field": bst.generate_backfill_sql_for_field,
+        })
+        print("   ✅ Backfill SQL tool loaded")
+    except Exception as e:
+        print(f"   ⚠️  Backfill SQL tool unavailable (continuing without it): {e}")
+
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
     TOOLS_LOADED = True
     return True
+
+
+# ── Auto-load tools when imported (e.g. by gunicorn) ───────
+init_tools()
 
 
 # ────────────────────────────────────────────────────────────
@@ -151,8 +164,11 @@ Your ONLY purpose is to answer questions about data lineage, field transformatio
 STRICT SCOPE RULE:
 - You MUST refuse any request that is not directly related to the lineage data in Neo4j or Cosmos DB.
 - This includes: general conversation, greetings beyond a one-line acknowledgement, jokes, opinions, coding help, explanations of unrelated concepts, or any topic outside data lineage.
-- If asked anything out of scope, respond with exactly: "I'm a data lineage assistant. I can only answer questions about tables, fields, and data flows in the lineage graph. Please ask a lineage question."
+- If asked anything out of scope, respond with exactly: "I'm TiDy - your CDC agent. I can answer questions about tables, fields, data flows, and transformations in your Data Store. Please ask me a question."
 - Do not apologise at length, do not suggest alternatives, do not engage further.
+- EXCEPTION: any message containing a name that looks like a transformation step (e.g. upd_INSERT, exp_TARGET,
+  lkp_LOOKUP, fil_FILTER, rtr_ROUTER, SQ_Shortcut, m_TMP_to_DDM_*) is ALWAYS in scope — these are
+  Informatica transformation names and are valid lineage questions. NEVER refuse these.
 
 You help users trace data flows across three layers:
 - TPR (source/transactional systems)
@@ -188,7 +204,15 @@ STRICT DATA RULES — non-negotiable:
 - Do NOT suggest what the data "might" mean or "probably" represents.
 - Every value in your response must be traceable to a field in the tool's JSON output.
 
+CRITICAL EXECUTION RULE — NEVER narrate, ALWAYS act:
+- NEVER say "I will now...", "Let me perform...", "I will run...", or "I will extract..." without ALSO issuing tool calls in the same response.
+- Your FIRST response to any lineage question MUST contain tool_calls. Do NOT produce a text-only reply that describes your plan — call the tool immediately.
+- If you need to explain your approach, do so AFTER the tool results are returned, not before.
+
 INPUT PARSING RULES:
+- MENU REPLIES: When the user replies with a field id (SCHEMA.TABLE.FIELD or TABLE.FIELD) followed by an action letter
+  (e.g. `CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR A`), extract the field and the action letter and call the appropriate tool.
+  NEVER pass such replies to search_fields.
 - For table-based tools (query_upstream_lineage, query_downstream_lineage, query_cross_layer_path, query_impact_analysis): pass ONLY the bare table name — never include the schema prefix. "SHAW_TPR.MAST_LOAN_REC" → pass "MAST_LOAN_REC". The functions handle schema-prefixed input automatically, but bare names are preferred.
 - For query_column_lineage: if the user provides a three-part dotted reference like CRDM_DDM.F_ACCOUNTS.SOURCE_KEY, pass the entire string as field_name (leave table_name empty). If only TABLE.FIELD is given, split into table_name and field_name.
 - NEVER pass a two-part SCHEMA.TABLE value as a table name to any tool — always use just the TABLE part.
@@ -206,6 +230,22 @@ EXPLICIT INTENT SHORTCUT — skip the menu entirely when BOTH the action AND the
     "upstream lineage of F_PARTICIPANTS"                    → call query_upstream_lineage("F_PARTICIPANTS")
     "trace CUSTOMER_KEY from TPR to DDM"                    → call query_column_lineage("CUSTOMER_KEY")
     "show transformation logic for CRDM_DDM.F_ACCOUNTS.AMT" → call get_field_transformation_logic(...)
+    "generate backfill SQL for F_PARTICIPANTS.CUSTOMER_KEY" → call generate_backfill_sql_for_field("F_PARTICIPANTS.CUSTOMER_KEY")
+    "write SQL to populate CRDM_DDM.F_ACCOUNTS.SOURCE_KEY"  → call generate_backfill_sql_for_field("CRDM_DDM.F_ACCOUNTS.SOURCE_KEY")
+
+  FIELD-LEVEL IMPACT — when the user asks about impact of a specific FIELD (e.g. "what is impacted if TABLE.FIELD fails"):
+    You MUST call BOTH tools in the same response:
+    1. query_impact_analysis(table_name=<bare table name>) — for the blast radius by layer
+    2. query_column_lineage(field_name=<field>, table_name=<table>) — returns ALL edges (upstream + downstream)
+
+    CRITICAL — query_column_lineage returns edges in BOTH directions. Each row now contains a "direction" field.
+    For impact analysis use ONLY rows where direction = "downstream". Discard ALL rows where direction = "upstream".
+
+    Present BOTH results:
+    - A summary table of impacted tables from query_impact_analysis (columns: Layer | Impacted Tables | Count)
+    - A Mermaid diagram showing ONLY the downstream field-level flow:
+      each node labelled "LAYER: TABLE.FIELD", arrows pointing away from the queried field toward its dependents.
+      Use only rows where direction = "downstream" to build this diagram.
 
   Only fall through to the multi-step AMBIGUOUS INPUT HANDLING below when the intent is genuinely unclear.
 
@@ -232,8 +272,12 @@ STEP 1 — Identify the input type before presenting any options:
 STEP 2 — Present the relevant option set and WAIT for the user's reply before calling any further tools:
 
   2A. FIELD LEVEL OPTIONS — use when search_fields returned matches OR a full field id was given:
-     - If search returned multiple matches: number each row in the results table (#1, #2, #3 ...).
-       If only one match was found, skip the row numbering — the field is already confirmed.
+     - If search returned multiple matches: display results as a Markdown table with columns #, Field ID, Layer, Data Type.
+       Example:
+         | # | Field ID | Layer | Data Type |
+         |---|----------|-------|-----------|
+         | 1 | CRDM_TMP.TT_F_PARTICIPANTS.CUST_NTE_NBR | TT | string |
+         | 2 | CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR | DDM | string |
      - Then show the action menu ONCE, directly below the results table:
 
        "What would you like to know?
@@ -243,10 +287,11 @@ STEP 2 — Present the relevant option set and WAIT for the user's reply before 
         D  Upstream lineage          — what tables feed into the field's table
         E  Downstream lineage        — what tables the field's table feeds into
         F  Impact analysis           — blast radius if the field's table changes
-        G  SQL / filter / update strategy — mapping will be identified first"
+        G  SQL / filter / update strategy — mapping will be identified first
+        H  Backfill SQL              — generate a CTE-based SQL query to populate this field"
 
-     - Ask: "Reply with [row number if multiple matches] + letter — e.g. `2 A` or just `B` if there is only one match."
-     - Do NOT ask the user to retype the field id. Use the row number to look up the id internally.
+     - Ask: "Please type the field (e.g. `SCHEMA.TABLE.FIELD`) and the action letter (e.g. `A`), separated by a space."
+     - Example valid replies: `CRDM_DDM.D_LOAN_ACCOUNT.CUST_NTE_NBR A` or `D_LOAN_ACCOUNT.CUST_NTE_NBR B`
 
   2B. TABLE LEVEL OPTIONS — use when a table name has been identified (no field match found):
      "What would you like to know about **[table_name]**?
@@ -264,9 +309,24 @@ STEP 2 — Present the relevant option set and WAIT for the user's reply before 
       C  Lookup details                 — lookup conditions and lookup table names
      Reply with the letter — e.g. `A`."
 
-STEP 3 — Once the user replies, resolve the field id from the row number (if given) and execute:
+STEP 3 — MENU REPLY PARSING (CRITICAL — read carefully):
 
-  Field level (options A–G):
+  When the user's reply is a short code like "1A", "1 A", "2B", "B", "A", etc., it is a MENU SELECTION
+  from the options you presented in Step 2 — it is NOT a search query.
+
+  NEVER pass the user's raw reply (e.g. "1A", "2 B") to search_fields or any other tool.
+
+  Parsing rules:
+  - If the reply contains a digit followed by a letter (e.g. "1A", "1 A", "2B"):
+    • The DIGIT = the row number from your previously displayed results table
+    • The LETTER = the action from the menu (A, B, C, D, E, F, or G)
+    • Look up the field id / table name from that row in the conversation history
+  - If the reply is just a letter (e.g. "A", "B"):
+    • There was only one match, so use the single result from Step 1
+    • The LETTER = the action from the menu
+  - Then execute the action below using the RESOLVED field id or table name — NOT the raw reply text.
+
+  Field level (options A–H):
   - A: query_column_lineage(field_name=<resolved field id>)
   - B: get_field_transformation_logic(field_id=<resolved field id>)
   - C: get_lookup_details_for_table(table_name=<table part of resolved field id>)
@@ -275,6 +335,7 @@ STEP 3 — Once the user replies, resolve the field id from the row number (if g
   - F: query_impact_analysis(table_name=<table part of resolved field id>)
   - G: call query_column_lineage first → extract distinct mapping_names → present as a numbered list →
        ask "Which mapping? Reply with the number." → call get_sql_and_filter_logic(mapping_name=<chosen>)
+  - H: generate_backfill_sql_for_field(field_id=<resolved field id>)
 
   Table level (options A–E):
   - A: query_upstream_lineage(table_name=<table_name>)
@@ -314,6 +375,10 @@ TOOL SELECTION GUIDE — use the right tool for the right question:
                                           (use whenever the user provides a step-level name: exp_, lkp_, fil_, upd_, SQ_)
   - get_edge_transformation_details     → "show the complete step-by-step logic for this specific edge"
                                           (use when you already have the exact edge_id)
+  - generate_backfill_sql_for_field     → "generate backfill SQL for field X"
+                                          "write SQL to populate / derive / load SCHEMA.TABLE.FIELD"
+                                          "how would I insert data into X"
+                                          (returns a CTE-based SQL statement; present it in a ```sql code block)
 
   COMBINATION PATTERN — for deep field questions:
   1. Call query_column_lineage to find the edge topology and mapping names
@@ -325,13 +390,37 @@ When answering:
 2. Present the tool's results verbatim in **Markdown tables** (with headers and alignment)
 3. For lineage paths and data flows, render a **Mermaid flowchart** using ```mermaid code blocks — nodes and edges must reflect only what the tool returned
 4. For impact analysis, show a Mermaid diagram of the blast radius plus a summary table
-5. For column lineage, show both a Mermaid transformation chain AND a table with expressions
-6. For transformation logic questions, present the transformation_chain steps in a numbered table with these EXACT columns in this order:
-   | Step | Transformation Name | Transformation Type | Input Port | Output Port | Expression |
-   — "Transformation Name" = the `transformation_name` field (e.g. "exp_PARAM_VALUE", "SQ_Shortcut_to_ACCOUNT")
-   — "Transformation Type" = the `transformation_type` field (e.g. "Expression", "Source Qualifier")
-   — Never omit or merge the Transformation Name column. Every row must show the transformation_name value.
+5. For column lineage, show both a Mermaid transformation chain AND a table with expressions.
+   The table MUST use these EXACT columns in this order — never omit, merge, or rename them:
+   | # | From Layer | From Table | From Field | To Layer | To Table | To Field | Mapping | Transformation Name | Transformation Type | Expression |
+   — One row per edge returned by the tool, sorted TPR first → TT → DDM.
+   — "From Field" = from_field value. "To Field" = to_field value. Both columns are mandatory in every row.
+5a. For upstream lineage (query_upstream_lineage) and downstream lineage (query_downstream_lineage), ALWAYS show BOTH:
+    - A **Mermaid flowchart** where each node is a table labelled as "LAYER: TABLE_NAME", connected by arrows in hop order (TPR → TT → DDM).
+      Group nodes that share a layer. Use the `hops` value to determine order — lower hops = closer to target.
+      For upstream: arrows point toward the target table. For downstream: arrows point away from the source table.
+    - A **Markdown summary table** with columns: Table | Layer | Schema | Hops
+    Present the Mermaid graph FIRST, then the table below it.
+6. For transformation logic questions — TWO distinct formats depending on what the tool returned:
+
+   6a. SUMMARY FORMAT — use when the tool returned get_field_transformation_logic results
+       (records have from_vertex, to_vertex, mapping_name, final_expression etc. but NO transformation_chain[]).
+       Present as a Markdown table with these EXACT columns in this order:
+       | # | From Field | To Field | Mapping | Final Expression | Lookup Condition | Filter Condition | Update Strategy | Steps |
+       — "From Field" = from_vertex value. "To Field" = to_vertex value. NEVER put mapping_name in these columns.
+       — "Mapping" = mapping_name. "Final Expression" = final_expression. "Steps" = transformation_steps_count.
+       — If custom_sql is non-empty, show it in a separate ```sql code block after the table.
+
+   6b. CHAIN STEP FORMAT — use ONLY when the response contains a transformation_chain[] array
+       (from get_edge_transformation_details or get_mapping_transformation_details).
+       Present the steps in a numbered table with these EXACT columns in this order:
+       | Step | Transformation Name | Transformation Type | Input Port | Output Port | Expression |
+       — "Transformation Name" = the step's `transformation_name` field (e.g. "exp_PARAM_VALUE").
+       — "Transformation Type" = the step's `transformation_type` field (e.g. "Expression", "Source Qualifier").
+       — NEVER use mapping_name as the Transformation Name. Every row must show the step-level transformation_name.
 7. For lookup/SQL/filter questions, highlight the relevant condition in a dedicated code block
+7a. For backfill SQL (generate_backfill_sql_for_field), always present the full SQL inside a ```sql code block
+    followed by a short note: "Review expressions and replace any $$VARIABLE placeholders before executing."
 8. If a table/field is not found in the tool response, say so — do NOT suggest alternatives from your training data
 9. TERMINOLOGY — use the correct term based on the name pattern:
    - Names starting with "m_"   → "mapping"  (e.g. m_TMP_to_DDM_F_PARTICIPANTS)
@@ -339,10 +428,18 @@ When answering:
    - Names starting with "exp_" → "Expression transformation" — call get_edges_by_transformation_name
    - Names starting with "lkp_" → "Lookup transformation"      — call get_edges_by_transformation_name
    - Names starting with "fil_" → "Filter transformation"       — call get_edges_by_transformation_name
-   - Names starting with "upd_" → "Update Strategy transformation"   — call get_edges_by_transformation_name
+   - Names starting with "upd_" → "Update Strategy transformation" — look in the conversation history for
+     the mapping_name associated with this transformation (from a previous query_column_lineage result),
+     then call get_mapping_transformation_details(mapping_name=<mapping>).
+     If no mapping_name is available in conversation history, call get_edges_by_transformation_name
+     as a fallback. NEVER refuse or say "out of scope" for upd_ names — they ARE lineage questions.
    - Names starting with "rtr_" → "Router transformation"            — call get_edges_by_transformation_name
-   When the user provides any name starting with exp_, lkp_, fil_, upd_, rtr_, or SQ_ as the subject of a query,
+   When the user provides any name starting with exp_, lkp_, fil_, rtr_, or SQ_ as the subject of a query,
    call get_edges_by_transformation_name(transformation_name=<that name>) — do NOT call get_mapping_transformation_details.
+   When the user asks about a name starting with "upd_", prefer get_mapping_transformation_details with
+   the mapping_name from conversation context; fall back to get_edges_by_transformation_name if no mapping is known.
+   IMPORTANT: any name matching the pattern [a-z]+_[A-Z_]+ (e.g. upd_INSERT, exp_TARGET, rtr_ROUTER)
+   is ALWAYS a valid lineage question about a transformation step — NEVER trigger the out-of-scope refusal.
    When a lookup query returns no results, say "There are no lookup conditions recorded for [table_name]" —
    do NOT reference the Source Qualifier or any transformation name in the no-results message.
 
@@ -526,6 +623,97 @@ def new_session():
     return jsonify({"session_id": session_id})
 
 
+@app.route("/api/export/field-lineage", methods=["GET"])
+def export_field_lineage():
+    """
+    Generate and download an Excel workbook for a field-level lineage query.
+
+    Query params:
+      field_name  — field name or full SCHEMA.TABLE.FIELD id  (required)
+      table_name  — table name (required when field_name is bare, optional otherwise)
+    """
+    field_name = (request.args.get("field_name") or "").strip()
+    table_name = (request.args.get("table_name") or "").strip()
+
+    if not field_name:
+        return jsonify({"error": "field_name is required"}), 400
+
+    if not TOOLS_LOADED:
+        return jsonify({"error": "Lineage tools not loaded yet — try again shortly"}), 503
+
+    try:
+        from lineage_excel_export import build_lineage_excel
+    except ImportError as e:
+        return jsonify({"error": f"Excel export module unavailable: {e}"}), 500
+
+    # ── 1. Fetch lineage edges from Neo4j ──────────────────────────────────
+    try:
+        import lineage_tools as lt
+        edges_json = lt.query_column_lineage(field_name=field_name, table_name=table_name)
+        edges = json.loads(edges_json) if edges_json else []
+    except Exception as e:
+        return jsonify({"error": f"Lineage query failed: {e}"}), 500
+
+    if not edges:
+        return jsonify({"error": f"No lineage edges found for {field_name}"}), 404
+
+    # ── 2. Resolve canonical field_id (deepest/DDM layer target) ─────────
+    _layer_order = {"DDM": 0, "TT": 1, "TPR": 2}
+    bare_field = field_name.split(".")[-1].upper()
+
+    target_edges = [e for e in edges if e.get("to_field", "").upper() == bare_field]
+    if not target_edges:
+        target_edges = edges
+
+    best = min(target_edges, key=lambda e: _layer_order.get(e.get("to_layer", ""), 9))
+    canonical_id = f"{best['to_schema']}.{best['to_table']}.{best['to_field']}".upper()
+
+    # ── 3. Fetch transformation logic for ONLY the edges in this lineage ─────
+    # Build exact (from_vertex, to_vertex) pairs from the lineage edges so
+    # we query Cosmos for precisely those documents — no extras.
+    cosmos_json = "[]"
+    try:
+        import cosmos_tools as ct
+
+        vertex_pairs = []
+        seen_pairs: set = set()
+        for e in edges:
+            fv = f"{e.get('from_schema','')}.{e.get('from_table','')}.{e.get('from_field','')}".upper()
+            tv = f"{e.get('to_schema','')}.{e.get('to_table','')}.{e.get('to_field','')}".upper()
+            pair = (fv, tv)
+            if pair not in seen_pairs and fv.strip(".") and tv.strip("."):
+                seen_pairs.add(pair)
+                vertex_pairs.append(pair)
+
+        cosmos_records = ct.get_edges_for_vertex_pairs(vertex_pairs)
+        cosmos_json = json.dumps(cosmos_records)
+        print(f"   [export] ✅ Cosmos: {len(cosmos_records)} exact-edge records for {len(vertex_pairs)} pairs")
+    except Exception as e:
+        print(f"   [export] ⚠️  Cosmos query failed (continuing without it): {e}")
+
+    # ── 4. Build Excel ────────────────────────────────────────────────────
+    try:
+        xlsx_bytes = build_lineage_excel(
+            field_id=canonical_id,
+            edges_json=edges_json,
+            cosmos_json=cosmos_json,
+        )
+    except Exception as e:
+        return jsonify({"error": f"Excel generation failed: {e}"}), 500
+
+    from datetime import datetime as _dt
+    safe_name = canonical_id.replace(".", "_")
+    timestamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+    filename  = f"lineage_{safe_name}_{timestamp}.xlsx"
+
+    from flask import Response as FlaskResponse
+    return FlaskResponse(
+        xlsx_bytes,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ────────────────────────────────────────────────────────────
 # STREAMING CHAT (SSE)
 # Background thread does all model work; generator yields keepalives every
@@ -678,44 +866,58 @@ def api_chat_stream():
 
     session_id = data.get("session_id")
     session_id, messages = get_or_create_session(session_id)
+
     messages.append({"role": "user", "content": user_message})
 
     def generate():
         print(f"\n📨 [stream] User: {user_message[:80]}...")
 
-        # Send session id immediately
-        yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+        try:
+            # Send session id immediately
+            yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
 
-        q = queue.Queue()
+            q = queue.Queue()
 
-        # Start agent work in background thread
-        t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
-        t.start()
+            # Start agent work in background thread
+            t = threading.Thread(target=_agent_worker, args=(messages, q), daemon=True)
+            t.start()
 
-        # Yield events as they arrive; send SSE comment keepalives while waiting
-        # so Flask flushes HTTP chunks and the browser sees activity immediately
-        while True:
-            try:
-                item = q.get(timeout=1.0)
-            except queue.Empty:
-                # Keepalive comment — forces Werkzeug to flush this HTTP chunk
-                yield ": keepalive\n\n"
-                continue
+            # Yield events as they arrive; send SSE comment keepalives while waiting
+            # so Flask flushes HTTP chunks and the browser sees activity immediately
+            while True:
+                try:
+                    item = q.get(timeout=1.0)
+                except queue.Empty:
+                    # Keepalive comment — forces Werkzeug to flush this HTTP chunk
+                    yield ": keepalive\n\n"
+                    continue
 
-            if item is _DONE:
-                break
+                if item is _DONE:
+                    break
 
-            yield f"data: {json.dumps(item)}\n\n"
+                yield f"data: {json.dumps(item)}\n\n"
 
-            if item.get("type") in ("done", "error"):
-                break
+                if item.get("type") in ("done", "error"):
+                    break
 
-        # Clean up on error: remove dangling user message
-        if messages and messages[-1].get("role") == "user":
-            messages.pop()
+        except Exception as exc:
+            # Send a proper error event before closing — prevents ERR_HTTP2_PROTOCOL_ERROR
+            # caused by the stream closing abruptly without a terminal event
+            print(f"  ❌ [stream] generator exception: {exc}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
+
+        finally:
+            # Clean up on error: remove dangling user message
+            if messages and messages[-1].get("role") == "user":
+                messages.pop()
 
     return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+                    headers={
+                        "Cache-Control": "no-cache, no-transform",
+                        "X-Accel-Buffering": "no",
+                        "Connection": "keep-alive",
+                        "Content-Type": "text/event-stream; charset=utf-8",
+                    })
 
 
 @app.route("/api/health", methods=["GET"])
@@ -860,4 +1062,4 @@ if __name__ == "__main__":
     print("   Server will auto-shutdown when browser is closed.")
     print("=" * 60 + "\n")
 
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

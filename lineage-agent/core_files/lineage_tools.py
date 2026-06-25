@@ -103,7 +103,8 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
     :return: A JSON array of every edge in the lineage paths, each with
              from_field, from_table, from_layer, from_schema, from_data_type, from_precision,
              to_field, to_table, to_layer, to_schema, to_data_type, to_precision,
-             mapping_name, transformation_name, transformation_type, and expression.
+             mapping_name, transformation_name, transformation_type, expression,
+             and direction ("upstream" = flows INTO the field, "downstream" = field flows OUT).
     :rtype: str
     """
     # Shared RETURN clause used in both query variants
@@ -154,6 +155,12 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
         import json as _json
         rows_back = _json.loads(result_back)
         rows_fwd  = _json.loads(result_fwd)
+
+        # Tag each row with direction before merging
+        for row in rows_back:
+            row["direction"] = "upstream"
+        for row in rows_fwd:
+            row["direction"] = "downstream"
 
         # Merge and deduplicate by (from_table, from_field, to_table, to_field, mapping_name)
         seen = set()
