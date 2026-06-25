@@ -513,6 +513,50 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0; }
         }
+
+        /* Excel export button */
+        .export-bar {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .export-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #1B5E20;
+            color: #fff;
+            border: none;
+            padding: 5px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: #2e7d32;
+        }
+
+        .export-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .export-btn svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .export-hint {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -728,6 +772,17 @@
                     appendToolCalls(msgDiv, toolCalls);
                 }
 
+                // Show Excel export button when query_column_lineage returned actual edges.
+                // result_length > 50 distinguishes real data from an empty array "[]" (2 chars).
+                const lineageCall = toolCalls.find(tc =>
+                    tc.function === 'query_column_lineage' &&
+                    tc.status === 'success' &&
+                    (tc.result_length || 0) > 50
+                );
+                if (lineageCall) {
+                    appendExportButton(msgDiv, lineageCall.args);
+                }
+
             } catch (err) {
                 bubble.innerHTML = formatResponse(`Connection error: ${err.message}`);
             }
@@ -816,6 +871,69 @@
             });
 
             msgDiv.appendChild(details);
+        }
+
+        // ─── Excel Export Button ───
+        function appendExportButton(msgDiv, args) {
+            // Build the export URL from the tool call args
+            const fieldName = args.field_name || '';
+            const tableName = args.table_name || '';
+            if (!fieldName) return;
+
+            const params = new URLSearchParams({ field_name: fieldName });
+            if (tableName) params.append('table_name', tableName);
+            const exportUrl = `/api/export/field-lineage?${params.toString()}`;
+
+            const bar = document.createElement('div');
+            bar.className = 'export-bar';
+
+            const btn = document.createElement('button');
+            btn.className = 'export-btn';
+            btn.title = 'Download lineage as Excel workbook (4 sheets: Summary, Lineage Path, Transformation Logic, Chain)';
+            btn.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download Lineage Excel
+            `;
+
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                btn.innerHTML = btn.innerHTML.replace('Download Lineage Excel', 'Generating…');
+                try {
+                    const res = await fetch(exportUrl);
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({ error: res.statusText }));
+                        alert(`Export failed: ${err.error || res.statusText}`);
+                        return;
+                    }
+                    const blob = await res.blob();
+                    const cdHeader = res.headers.get('Content-Disposition') || '';
+                    const nameMatch = cdHeader.match(/filename="(.+?)"/);
+                    const filename = nameMatch ? nameMatch[1] : 'lineage_export.xlsx';
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = btn.innerHTML.replace('Generating…', 'Download Lineage Excel');
+                }
+            });
+
+            const hint = document.createElement('span');
+            hint.className = 'export-hint';
+            hint.textContent = '4 sheets: Summary · Lineage Path · Transformation Logic · Chain';
+
+            bar.appendChild(btn);
+            bar.appendChild(hint);
+            msgDiv.appendChild(bar);
         }
 
         // ─── Add Message to Chat ───

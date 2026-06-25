@@ -358,3 +358,43 @@ def get_sql_and_filter_logic(mapping_name: str) -> str:
             seen_sql.add(sql_val)
         deduped.append(r)
     return json.dumps(deduped, ensure_ascii=False, indent=2)
+
+
+# ─── Internal helper: fetch exact edges by (from_vertex, to_vertex) pairs ───
+
+def get_edges_for_vertex_pairs(vertex_pairs: list[tuple[str, str]]) -> list[dict]:
+    """
+    Fetches full Cosmos documents (including transformation_chain) for an exact
+    list of (from_vertex, to_vertex) pairs. Used by the Excel export to ensure
+    only edges that are part of the specific field lineage are returned.
+
+    :param vertex_pairs: List of (from_vertex, to_vertex) tuples in SCHEMA.TABLE.FIELD format.
+    :return: List of Cosmos documents (dicts), one per matching edge.
+    """
+    container = _get_container()
+    results = []
+    seen_keys: set[tuple] = set()
+
+    for from_v, to_v in vertex_pairs:
+        key = (from_v.upper(), to_v.upper())
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        sql = "SELECT * FROM c WHERE c.from_vertex = @fv AND c.to_vertex = @tv"
+        params = [
+            {"name": "@fv", "value": from_v.upper()},
+            {"name": "@tv", "value": to_v.upper()},
+        ]
+        try:
+            rows = list(container.query_items(
+                query=sql, parameters=params, enable_cross_partition_query=True
+            ))
+            for r in rows:
+                for k in ("_rid", "_self", "_etag", "_attachments", "_ts"):
+                    r.pop(k, None)
+            results.extend(rows)
+        except Exception as e:
+            print(f"   [cosmos] ⚠️  Edge query failed for {from_v}→{to_v}: {e}")
+
+    return results
