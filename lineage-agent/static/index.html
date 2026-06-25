@@ -772,8 +772,13 @@
                     appendToolCalls(msgDiv, toolCalls);
                 }
 
-                // Add Excel export button if query_column_lineage was used
-                const lineageCall = toolCalls.find(tc => tc.function === 'query_column_lineage' && tc.status === 'success');
+                // Show Excel export button when query_column_lineage returned actual edges.
+                // result_length > 50 distinguishes real data from an empty array "[]" (2 chars).
+                const lineageCall = toolCalls.find(tc =>
+                    tc.function === 'query_column_lineage' &&
+                    tc.status === 'success' &&
+                    (tc.result_length || 0) > 50
+                );
                 if (lineageCall) {
                     appendExportButton(msgDiv, lineageCall.args);
                 }
