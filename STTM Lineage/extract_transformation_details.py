@@ -162,6 +162,34 @@ def parse_reusable_transformations(folder: ET.Element) -> dict:
     return _parse_transformations(folder.findall("TRANSFORMATION"))
 
 
+def parse_udfs(folder: ET.Element) -> dict:
+    """
+    Parse EXPRMACRO elements into a dict of {udf_name: expression_body}.
+    These are user-defined functions (UDFs) referenced in expressions as
+    :UDF.TRIM(...) or UDF_SHAW_NUMERIC_TO_DATE(...) etc.
+    """
+    udfs = {}
+    for macro in folder.findall("EXPRMACRO"):
+        name = macro.get("NAME", "")
+        expr = macro.get("EXPRESSION", "")
+        if name:
+            udfs[name] = expr
+    return udfs
+
+
+def parse_mapping_variables(mapping: ET.Element) -> dict:
+    """
+    Parse MAPPINGVARIABLE elements → {var_name: default_value}.
+    Variables like $$APPL appear in filter/lookup conditions.
+    """
+    variables = {}
+    for mv in mapping.findall("MAPPINGVARIABLE"):
+        name = mv.get("NAME", "")
+        if name:
+            variables[name] = mv.get("DEFAULTVALUE", "")
+    return variables
+
+
 def _parse_transformations(t_elements) -> dict:
     """
     Parse a list of TRANSFORMATION XML elements into a rich dict:
@@ -218,6 +246,23 @@ def _build_transform_step(t_name: str, t_type: str, input_port: str,
     # All port expressions — useful for understanding the full transformation
     all_ports = {pname: pinfo.get("expression", "") for pname, pinfo in fields.items()}
 
+    # LOCAL VARIABLE ports — expressions that define intermediate variables
+    # These are referenced by output ports (e.g. v_DEFAULT_KEY_VALUE = TO_INTEGER(i_CODE_VALUE))
+    local_variables = {
+        pname: pinfo.get("expression", "")
+        for pname, pinfo in fields.items()
+        if pinfo.get("porttype", "").upper() == "LOCAL VARIABLE" and pinfo.get("expression", "")
+    }
+
+    # Full Lookup SQL Override (untruncated) — used to generate correct JOIN SQL
+    lookup_sql_override = attrs.get("Lookup Sql Override", "") or attrs.get("Lookup SQL Override", "")
+    # Strip trailing -- comment added by Informatica
+    if lookup_sql_override.endswith("--"):
+        lookup_sql_override = lookup_sql_override[:-2].rstrip()
+
+    # Lookup Source Filter (separate from lookup condition — filters the cache population)
+    lookup_source_filter = attrs.get("Lookup Source Filter", "")
+
     # Named extraction of well-known attributes
     custom_sql = (
         attrs.get("User Defined Query")
@@ -257,9 +302,12 @@ def _build_transform_step(t_name: str, t_type: str, input_port: str,
         "custom_sql"                 : custom_sql,
         "lookup_condition"           : lookup_condition,
         "lookup_table_name"          : lookup_table_name,
+        "lookup_sql_override"        : lookup_sql_override,
+        "lookup_source_filter"       : lookup_source_filter,
         "filter_condition"           : filter_condition,
         "update_strategy_expression" : update_strategy_expression,
         "join_condition"             : join_condition,
+        "local_variables"            : local_variables,
         "all_ports"                  : all_ports,
         "raw_attributes"             : attrs,     # keep everything for future use
     }
@@ -570,12 +618,17 @@ def extract_folder_details(folder: ET.Element) -> list[dict]:
     targets               = parse_targets(folder)
     reusable_transforms   = parse_reusable_transformations(folder)
     shortcuts             = parse_shortcuts(folder)
+    folder_udfs           = parse_udfs(folder)
 
     all_records: dict[str, dict] = {}
     for mapping in folder.findall("MAPPING"):
+        mapping_variables = parse_mapping_variables(mapping)
         for rec in extract_mapping_details(
             mapping, folder_name, sources, targets, reusable_transforms, shortcuts
         ):
+            # Attach folder-level UDFs and mapping-level variables to every edge record
+            rec["udfs"]             = folder_udfs
+            rec["mapping_variables"] = mapping_variables
             all_records[rec["edge_id"]] = rec
 
     return list(all_records.values())

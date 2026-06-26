@@ -93,13 +93,14 @@ def _trim_empties(obj):
 
 def _prepare_document(record: dict) -> dict:
     """
-    Convert an edge record into a Cosmos DB document.
-    - Set 'id' to edge_id (Cosmos requirement)
+    Convert a record into a Cosmos DB document.
+    - Set 'id' to edge_id for transformation_details, mapping_name for mapping_metadata
     - Ensure partition key field 'mapping_name' is present
     - Trim empty strings to keep the document compact
     """
     doc = dict(record)
-    doc["id"] = doc["edge_id"]          # Cosmos DB document id
+    # Use edge_id if present (transformation_details), else mapping_name (mapping_metadata)
+    doc["id"] = doc.get("edge_id") or doc.get("mapping_name") or doc.get("id", "unknown")
     doc = _trim_empties(doc)
     return doc
 
@@ -225,11 +226,16 @@ def main():
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    records = data.get("transformation_details", [])
+    # Support both transformation_details and mapping_metadata JSON layouts
+    records = (
+        data.get("transformation_details")
+        or data.get("mapping_metadata")
+        or []
+    )
     stats   = data.get("stats", {})
     print(f"  Records in file : {len(records)}")
     print(f"  Source file     : {data.get('source_file', 'unknown')}")
-    print(f"  Mappings parsed : {stats.get('mappings_parsed', '?')}")
+    print(f"  Mappings parsed : {stats.get('mappings_parsed', stats.get('mappings_found', '?'))}")
 
     if not records:
         print("No records to load. Exiting.")

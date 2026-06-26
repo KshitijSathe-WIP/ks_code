@@ -277,6 +277,7 @@ def chat(messages):
             tool_choice="auto",
             stream=True,
             max_completion_tokens=8000,
+            temperature=0,
         )
 
         # Accumulate streamed response

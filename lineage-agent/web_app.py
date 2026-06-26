@@ -236,16 +236,15 @@ EXPLICIT INTENT SHORTCUT — skip the menu entirely when BOTH the action AND the
   FIELD-LEVEL IMPACT — when the user asks about impact of a specific FIELD (e.g. "what is impacted if TABLE.FIELD fails"):
     You MUST call BOTH tools in the same response:
     1. query_impact_analysis(table_name=<bare table name>) — for the blast radius by layer
-    2. query_column_lineage(field_name=<field>, table_name=<table>) — returns ALL edges (upstream + downstream)
+    2. query_column_lineage(field_name=<field>, table_name=<table>, direction="downstream") — downstream edges ONLY
 
-    CRITICAL — query_column_lineage returns edges in BOTH directions. Each row now contains a "direction" field.
-    For impact analysis use ONLY rows where direction = "downstream". Discard ALL rows where direction = "upstream".
+    The direction="downstream" parameter ensures ONLY edges where the field flows OUT are returned.
+    Do NOT call query_column_lineage without direction="downstream" for impact questions.
 
     Present BOTH results:
     - A summary table of impacted tables from query_impact_analysis (columns: Layer | Impacted Tables | Count)
-    - A Mermaid diagram showing ONLY the downstream field-level flow:
+    - A Mermaid diagram of the downstream field-level flow using the edges returned:
       each node labelled "LAYER: TABLE.FIELD", arrows pointing away from the queried field toward its dependents.
-      Use only rows where direction = "downstream" to build this diagram.
 
   Only fall through to the multi-step AMBIGUOUS INPUT HANDLING below when the intent is genuinely unclear.
 
@@ -395,6 +394,17 @@ When answering:
    | # | From Layer | From Table | From Field | To Layer | To Table | To Field | Mapping | Transformation Name | Transformation Type | Expression |
    — One row per edge returned by the tool, sorted TPR first → TT → DDM.
    — "From Field" = from_field value. "To Field" = to_field value. Both columns are mandatory in every row.
+   MERMAID for column lineage — FIELD-LEVEL nodes only. Each node MUST show both table AND field:
+   - Node label format: "LAYER: TABLE_NAME.FIELD_NAME" — NEVER show table name alone.
+   - One node per unique SCHEMA.TABLE.FIELD combination. Edges = TRANSFORMS_TO relationships between fields.
+   - Example:
+     ```mermaid
+     graph TD
+       A["TPR: MAST_LOAN_REC.PARTICIPANT_KEY"] --> B["TT: TT_F_PARTICIPANTS.PARTICIPANT_KEY"]
+       B --> C["DDM: F_PARTICIPANTS.PARTICIPANT_KEY"]
+     ```
+   - Build from the table's from_layer, from_table, from_field → to_layer, to_table, to_field columns.
+   - Do NOT collapse edges to table-level. Every field in the chain must be its own distinct node.
 5a. For upstream lineage (query_upstream_lineage) and downstream lineage (query_downstream_lineage), ALWAYS show BOTH:
     - A **Mermaid flowchart** where each node is a table labelled as "LAYER: TABLE_NAME", connected by arrows in hop order (TPR → TT → DDM).
       Group nodes that share a layer. Use the `hops` value to determine order — lower hops = closer to target.

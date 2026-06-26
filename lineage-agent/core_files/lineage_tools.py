@@ -82,11 +82,9 @@ def query_downstream_lineage(table_name: str, max_depth: str = "10") -> str:
     return neo4j_client.run_cypher(cypher, {"table_name": table_name})
 
 # ─── 3. Field-Level Lineage ───
-def query_column_lineage(field_name: str, table_name: str) -> str:
+def query_column_lineage(field_name: str, table_name: str, direction: str = "both") -> str:
     """
-    Retrieves field-level lineage showing ALL edges connected to a specific field —
-    both upstream (what flows INTO the field) and downstream (what the field flows INTO).
-    Traces TRANSFORMS_TO in both directions to give a complete picture.
+    Retrieves field-level lineage edges connected to a specific field.
 
     Accepts two input styles:
     - Dotted id format: pass field_name="CRDM_DDM.F_ACCOUNTS.SOURCE_KEY", table_name=""
@@ -100,11 +98,15 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                        Example: "SOURCE_KEY" or "CRDM_DDM.F_ACCOUNTS.SOURCE_KEY"
     :param table_name: The table containing this field. Leave empty if using dotted id.
                        Example: "F_ACCOUNTS"
-    :return: A JSON array of every edge in the lineage paths, each with
+    :param direction: Which edges to return.
+                      "both"       — upstream + downstream (default, for column lineage view)
+                      "downstream" — ONLY edges where the field flows OUT (use for impact analysis)
+                      "upstream"   — ONLY edges where the field flows IN
+    :return: A JSON array of matching edges, each with
              from_field, from_table, from_layer, from_schema, from_data_type, from_precision,
              to_field, to_table, to_layer, to_schema, to_data_type, to_precision,
              mapping_name, transformation_name, transformation_type, expression,
-             and direction ("upstream" = flows INTO the field, "downstream" = field flows OUT).
+             and direction ("upstream" or "downstream").
     :rtype: str
     """
     # Shared RETURN clause used in both query variants
@@ -130,8 +132,9 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
     """
 
     def _run_bidirectional(match_clause: str, params: dict) -> str:
-        """Run backward (upstream) query; if empty, try forward (downstream); merge both."""
-        backward = f"""
+        import json as _json
+
+        backward_cypher = f"""
             {match_clause}
             MATCH path = (source:Field)-[:TRANSFORMS_TO*1..10]->(anchor)
             UNWIND range(0, length(path)-1) AS idx
@@ -140,7 +143,7 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                  nodes(path)[idx+1] AS to_node
             {_RETURN_COLS}
         """
-        forward = f"""
+        forward_cypher = f"""
             {match_clause}
             MATCH path = (anchor)-[:TRANSFORMS_TO*1..10]->(downstream:Field)
             UNWIND range(0, length(path)-1) AS idx
@@ -149,18 +152,18 @@ def query_column_lineage(field_name: str, table_name: str) -> str:
                  nodes(path)[idx+1] AS to_node
             {_RETURN_COLS}
         """
-        result_back = neo4j_client.run_cypher(backward, params)
-        result_fwd  = neo4j_client.run_cypher(forward,  params)
 
-        import json as _json
-        rows_back = _json.loads(result_back)
-        rows_fwd  = _json.loads(result_fwd)
+        rows_back, rows_fwd = [], []
 
-        # Tag each row with direction before merging
-        for row in rows_back:
-            row["direction"] = "upstream"
-        for row in rows_fwd:
-            row["direction"] = "downstream"
+        if direction in ("both", "upstream"):
+            rows_back = _json.loads(neo4j_client.run_cypher(backward_cypher, params))
+            for row in rows_back:
+                row["direction"] = "upstream"
+
+        if direction in ("both", "downstream"):
+            rows_fwd = _json.loads(neo4j_client.run_cypher(forward_cypher, params))
+            for row in rows_fwd:
+                row["direction"] = "downstream"
 
         # Merge and deduplicate by (from_table, from_field, to_table, to_field, mapping_name)
         seen = set()
