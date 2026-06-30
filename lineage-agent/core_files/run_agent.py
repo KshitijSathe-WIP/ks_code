@@ -75,6 +75,29 @@ def _init_tools():
         print("   ✅ Cosmos DB tools loaded")
     except Exception as e:
         print(f"   ⚠️  Cosmos tools unavailable (continuing without them): {e}")
+
+    # ── Version management tools (additive, optional) ──────────────────
+    try:
+        import version_tools as vt
+        FUNCTION_REGISTRY.update({
+            "get_active_version_info":  vt.get_active_version_info,
+            "list_lineage_versions":    vt.list_lineage_versions,
+            "get_version_diff_summary": vt.get_version_diff_summary,
+        })
+        print("   ✅ Version management tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Version tools unavailable (continuing without them): {e}")
+
+    # ── Change submission tools (additive, optional) ───────────────────
+    try:
+        import change_tools as cht
+        FUNCTION_REGISTRY.update({
+            "submit_change_file": cht.submit_change_file,
+        })
+        print("   ✅ Change submission tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Change tools unavailable (continuing without them): {e}")
+
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
 
 # ────────────────────────────────────────────────────────────

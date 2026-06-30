@@ -11,8 +11,31 @@
 
 import json
 from neo4j_client import Neo4jLineageClient
+from active_version import get as _get_active_version
 
 neo4j_client = Neo4jLineageClient()
+
+
+def _ver(alias: str = "f") -> tuple[str, str, dict]:
+    """
+    Returns (ver_where, ver_and, extra_params) for injecting an active-version
+    filter into Cypher queries.
+
+    ver_where — standalone WHERE clause  (use when query has no existing WHERE)
+    ver_and   — AND clause fragment      (append to an existing WHERE clause)
+    extra_params — {'version_id': vid}  (merge into the query params dict)
+
+    All three are empty / {} when no ACTIVE version is registered, which keeps
+    all queries working exactly as before (no version filter applied).
+    """
+    vid = _get_active_version()
+    if vid:
+        return (
+            f"WHERE {alias}.version_id = $version_id",
+            f"AND {alias}.version_id = $version_id",
+            {"version_id": vid},
+        )
+    return "", "", {}
 
 
 def _bare_table(name: str) -> str:
@@ -38,10 +61,11 @@ def query_upstream_lineage(table_name: str, max_depth: str = "10") -> str:
     """
     table_name = _bare_table(table_name)
     safe_depth = int(max_depth)
+    _vw, _va, _vp = _ver("upstream")
     cypher = f"""
         MATCH (target:Field {{table_name: $table_name}})
         MATCH path = (upstream:Field)-[:TRANSFORMS_TO*1..{safe_depth}]->(target)
-        WHERE upstream.table_name <> $table_name
+        WHERE upstream.table_name <> $table_name {_va}
         WITH upstream.table_name  AS table_name,
              upstream.layer       AS layer,
              upstream.db_schema   AS db_schema,
@@ -49,7 +73,7 @@ def query_upstream_lineage(table_name: str, max_depth: str = "10") -> str:
         RETURN table_name, layer, db_schema, hops
         ORDER BY hops ASC, table_name ASC
     """
-    return neo4j_client.run_cypher(cypher, {"table_name": table_name})
+    return neo4j_client.run_cypher(cypher, {"table_name": table_name, **_vp})
 
 # ─── 2. Downstream Lineage ───
 def query_downstream_lineage(table_name: str, max_depth: str = "10") -> str:
@@ -68,10 +92,11 @@ def query_downstream_lineage(table_name: str, max_depth: str = "10") -> str:
     """
     table_name = _bare_table(table_name)
     safe_depth = int(max_depth)
+    _vw, _va, _vp = _ver("downstream")
     cypher = f"""
         MATCH (source:Field {{table_name: $table_name}})
         MATCH path = (source)-[:TRANSFORMS_TO*1..{safe_depth}]->(downstream:Field)
-        WHERE downstream.table_name <> $table_name
+        WHERE downstream.table_name <> $table_name {_va}
         WITH downstream.table_name AS table_name,
              downstream.layer      AS layer,
              downstream.db_schema  AS db_schema,
@@ -79,7 +104,7 @@ def query_downstream_lineage(table_name: str, max_depth: str = "10") -> str:
         RETURN table_name, layer, db_schema, hops
         ORDER BY hops ASC, table_name ASC
     """
-    return neo4j_client.run_cypher(cypher, {"table_name": table_name})
+    return neo4j_client.run_cypher(cypher, {"table_name": table_name, **_vp})
 
 # ─── 3. Field-Level Lineage ───
 def query_column_lineage(field_name: str, table_name: str, direction: str = "both") -> str:
@@ -178,10 +203,14 @@ def query_column_lineage(field_name: str, table_name: str, direction: str = "bot
         return _json.dumps(merged, ensure_ascii=False, indent=2)
 
     # If field_name contains dots, treat it as the node's id property
+    vid = _get_active_version()
+    _ver_suffix = f"\n        WHERE anchor.version_id = $version_id" if vid else ""
+    _vp = {"version_id": vid} if vid else {}
+
     if field_name.count('.') >= 2:
         return _run_bidirectional(
-            "MATCH (anchor:Field {id: $field_id})",
-            {"field_id": field_name}
+            f"MATCH (anchor:Field {{id: $field_id}}){_ver_suffix}",
+            {"field_id": field_name, **_vp}
         )
 
     # If field_name is TABLE.FIELD format (1 dot), split into components
@@ -189,8 +218,8 @@ def query_column_lineage(field_name: str, table_name: str, direction: str = "bot
         table_name, field_name = field_name.split('.', 1)
 
     return _run_bidirectional(
-        "MATCH (anchor:Field {field_name: $field_name, table_name: $table_name})",
-        {"field_name": field_name, "table_name": table_name}
+        f"MATCH (anchor:Field {{field_name: $field_name, table_name: $table_name}}){_ver_suffix}",
+        {"field_name": field_name, "table_name": table_name, **_vp}
     )
 
 # ─── 4. Cross-Layer Path ───
@@ -209,21 +238,20 @@ def query_cross_layer_path(source_table: str, target_table: str) -> str:
     """
     source_table = _bare_table(source_table)
     target_table = _bare_table(target_table)
-    # Traverse outward from all source-table fields (bounded to 15 hops) until
-    # a target-table field is reached.  Avoids a cartesian-product + shortestPath
-    # which can timeout on Aura when either table has many fields.
-    cypher = """
-        MATCH (src:Field {table_name: $source_table})
-        MATCH path = (src)-[:TRANSFORMS_TO*1..15]->(tgt:Field {table_name: $target_table})
+    _vw, _va, _vp = _ver("src")
+    cypher = f"""
+        MATCH (src:Field {{table_name: $source_table}})
+        {_vw}
+        MATCH path = (src)-[:TRANSFORMS_TO*1..15]->(tgt:Field {{table_name: $target_table}})
         WITH path,
-             [n IN nodes(path) | {
+             [n IN nodes(path) | {{
                  table_name: n.table_name,
                  field_name: n.field_name,
                  layer:      n.layer,
                  db_schema:  n.db_schema,
                  data_type:  n.data_type,
                  precision:  n.precision
-             }] AS lineage_path,
+             }}] AS lineage_path,
              length(path) AS total_hops
         RETURN lineage_path, total_hops
         ORDER BY total_hops ASC
@@ -231,7 +259,8 @@ def query_cross_layer_path(source_table: str, target_table: str) -> str:
     """
     return neo4j_client.run_cypher(cypher, {
         "source_table": source_table,
-        "target_table": target_table
+        "target_table": target_table,
+        **_vp
     })
 
 # ─── 5. Impact Analysis ───
@@ -247,10 +276,12 @@ def query_impact_analysis(table_name: str) -> str:
     :rtype: str
     """
     table_name = _bare_table(table_name)
-    cypher = """
-        MATCH (source:Field {table_name: $table_name})
+    _vw, _va, _vp = _ver("source")
+    cypher = f"""
+        MATCH (source:Field {{table_name: $table_name}})
+        {_vw}
         MATCH (source)-[:TRANSFORMS_TO*1..10]->(impacted:Field)
-        WHERE impacted.table_name <> $table_name
+        WHERE impacted.table_name <> $table_name {_va}
         WITH DISTINCT impacted.table_name AS table_name,
                       impacted.layer      AS layer,
                       impacted.db_schema  AS db_schema
@@ -266,7 +297,7 @@ def query_impact_analysis(table_name: str) -> str:
                 ELSE 4
             END ASC
     """
-    return neo4j_client.run_cypher(cypher, {"table_name": table_name})
+    return neo4j_client.run_cypher(cypher, {"table_name": table_name, **_vp})
 
 # ─── 6. Layer Inventory ───
 def query_tables_by_layer(layer_name: str) -> str:
@@ -278,15 +309,17 @@ def query_tables_by_layer(layer_name: str) -> str:
     :return: A JSON array of tables with table_name, db_schema, and field_count.
     :rtype: str
     """
-    cypher = """
-        MATCH (f:Field {layer: $layer_name})
+    _vw, _va, _vp = _ver("f")
+    cypher = f"""
+        MATCH (f:Field {{layer: $layer_name}})
+        {_vw}
         WITH f.table_name AS table_name,
              f.db_schema  AS db_schema,
              count(f)     AS field_count
         RETURN table_name, db_schema, field_count
         ORDER BY table_name ASC
     """
-    return neo4j_client.run_cypher(cypher, {"layer_name": layer_name})
+    return neo4j_client.run_cypher(cypher, {"layer_name": layer_name, **_vp})
 
 # ─── 7. Search Fields (fuzzy lookup) ───
 def search_fields(search_term: str) -> str:
@@ -307,12 +340,14 @@ def search_fields(search_term: str) -> str:
     """
     # If dotted format, search each part independently and intersect in Cypher
     parts = search_term.strip().split('.')
+    _vw, _va, _vp = _ver("f")
     if len(parts) == 2:
         # TABLE.FIELD — match table_name contains parts[0] AND field_name contains parts[1]
-        cypher = """
+        cypher = f"""
             MATCH (f:Field)
             WHERE toLower(f.table_name) CONTAINS toLower($part0)
               AND toLower(f.field_name) CONTAINS toLower($part1)
+              {_va}
             RETURN f.db_schema   AS db_schema,
                    f.table_name  AS table_name,
                    f.field_name  AS field_name,
@@ -322,14 +357,15 @@ def search_fields(search_term: str) -> str:
             ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
             LIMIT 50
         """
-        return neo4j_client.run_cypher(cypher, {"part0": parts[0], "part1": parts[1]})
+        return neo4j_client.run_cypher(cypher, {"part0": parts[0], "part1": parts[1], **_vp})
     if len(parts) >= 3:
         # SCHEMA.TABLE.FIELD — match all three parts
-        cypher = """
+        cypher = f"""
             MATCH (f:Field)
             WHERE toLower(f.db_schema)  CONTAINS toLower($part0)
               AND toLower(f.table_name) CONTAINS toLower($part1)
               AND toLower(f.field_name) CONTAINS toLower($part2)
+              {_va}
             RETURN f.db_schema   AS db_schema,
                    f.table_name  AS table_name,
                    f.field_name  AS field_name,
@@ -339,13 +375,16 @@ def search_fields(search_term: str) -> str:
             ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
             LIMIT 50
         """
-        return neo4j_client.run_cypher(cypher, {"part0": parts[0], "part1": parts[1], "part2": parts[2]})
+        return neo4j_client.run_cypher(cypher, {"part0": parts[0], "part1": parts[1], "part2": parts[2], **_vp})
 
-    cypher = """
+    cypher = f"""
         MATCH (f:Field)
-        WHERE toLower(f.field_name)  CONTAINS toLower($search_term)
-           OR toLower(f.table_name)  CONTAINS toLower($search_term)
-           OR toLower(f.db_schema)   CONTAINS toLower($search_term)
+        WHERE (
+               toLower(f.field_name)  CONTAINS toLower($search_term)
+            OR toLower(f.table_name)  CONTAINS toLower($search_term)
+            OR toLower(f.db_schema)   CONTAINS toLower($search_term)
+        )
+        {_va}
         RETURN f.db_schema   AS db_schema,
                f.table_name  AS table_name,
                f.field_name  AS field_name,
@@ -355,7 +394,7 @@ def search_fields(search_term: str) -> str:
         ORDER BY f.layer ASC, f.table_name ASC, f.field_name ASC
         LIMIT 50
     """
-    return neo4j_client.run_cypher(cypher, {"search_term": search_term})
+    return neo4j_client.run_cypher(cypher, {"search_term": search_term, **_vp})
 
 # ─── 8. Custom Cypher ───
 def run_custom_cypher(cypher_query: str) -> str:

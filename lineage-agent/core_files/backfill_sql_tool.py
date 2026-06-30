@@ -2,7 +2,7 @@
 # ────────────────────────────────────────────────────────────
 # Agent Tool: Generate Backfill SQL for a DDM Field
 #
-# Wraps generate_backfill_sql.py (lineage-agent root) so the
+# Wraps generate_backfill_sql.py (lineage-agent/scripts/) so the
 # web agent can call it as a registered tool function.
 # ────────────────────────────────────────────────────────────
 
@@ -10,11 +10,13 @@ import sys
 import json
 from pathlib import Path
 
-# Ensure the lineage-agent root is on sys.path so we can import
-# generate_backfill_sql.py which lives one level above core_files/
+# Ensure the scripts/ folder is on sys.path so we can import
+# generate_backfill_sql.py which was moved to lineage-agent/scripts/
 _AGENT_ROOT = Path(__file__).resolve().parent.parent
-if str(_AGENT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_AGENT_ROOT))
+_SCRIPTS_DIR = _AGENT_ROOT / "scripts"
+for _p in (str(_SCRIPTS_DIR), str(_AGENT_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from generate_backfill_sql import generate_backfill_sql, resolve_field_id, LineageDataAccess
 

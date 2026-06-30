@@ -149,5 +149,212 @@
         ]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "search_fields",
+      "description": "Searches for fields and tables whose names contain the given term (case-insensitive). Use this when other tools return empty results to find the correct table_name or field_name.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "search_term": {
+            "type": "string",
+            "description": "A partial or full name to search for. Can be TABLE.FIELD or SCHEMA.TABLE.FIELD dotted format. Example: \"SOURCE_KEY\", \"F_ACCOUNTS.SOURCE_KEY\""
+          }
+        },
+        "required": ["search_term"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_edge_transformation_details",
+      "description": "Retrieves the complete transformation chain for a specific lineage edge. Returns the full step-by-step transformation logic.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "edge_id": {
+            "type": "string",
+            "description": "The exact edge identifier. Example: \"CRDM_TMP.TT_F_PARTICIPANTS.CUSTOMER_KEY__to__CRDM_DDM.F_PARTICIPANTS.CUSTOMER_KEY__m_TMP_to_DDM_F_PARTICIPANTS\""
+          }
+        },
+        "required": ["edge_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_field_transformation_logic",
+      "description": "Retrieves all transformation logic records where a specific field is either the source or target of a transformation. Returns expressions, lookups, filters, SQL.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "description": "The field identifier in SCHEMA.TABLE.FIELD or TABLE.FIELD format. Example: \"CRDM_DDM.F_PARTICIPANTS.CUSTOMER_KEY\""
+          }
+        },
+        "required": ["field_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_mapping_transformation_details",
+      "description": "Retrieves all edge transformation records for a specific Informatica mapping. Returns summary-level details for every field-to-field edge.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mapping_name": {
+            "type": "string",
+            "description": "The Informatica mapping name. Example: \"m_TMP_to_DDM_F_PARTICIPANTS\""
+          }
+        },
+        "required": ["mapping_name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_lookup_details_for_table",
+      "description": "Retrieves all edges where a lookup transformation is applied to fields flowing into or out of the specified table.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "table_name": {
+            "type": "string",
+            "description": "The table name (without schema prefix). Example: \"F_PARTICIPANTS\""
+          }
+        },
+        "required": ["table_name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_edges_by_transformation_name",
+      "description": "Searches all edges whose transformation_chain contains a step with the given transformation_name. Use when the user provides a transformation step name like \"exp_Tgt_...\" or \"lkp_...\".",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "transformation_name": {
+            "type": "string",
+            "description": "The exact transformation step name. Example: \"exp_Tgt_TT_D_PARTICIPANT\""
+          }
+        },
+        "required": ["transformation_name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_sql_and_filter_logic",
+      "description": "Retrieves all custom SQL queries, filter conditions, and update strategy expressions used within a specific Informatica mapping.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mapping_name": {
+            "type": "string",
+            "description": "The Informatica mapping name. Example: \"m_DDM_to_DDM_AGG_ACCOUNT_STAT60\""
+          }
+        },
+        "required": ["mapping_name"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_active_version_info",
+      "description": "Returns the metadata for the currently active lineage version, including version_id, description, who approved it, and when it became active.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_lineage_versions",
+      "description": "Lists lineage versions tracked in the version registry, optionally filtered by lifecycle status (DRAFT, ACTIVE, ARCHIVED, REJECTED).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Optional filter: DRAFT, ACTIVE, ARCHIVED, REJECTED, or empty for all."
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_version_diff_summary",
+      "description": "Returns the diff report for a DRAFT version showing which edges were added, removed, or changed compared to the base ACTIVE version.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "draft_version_id": {
+            "type": "string",
+            "description": "The version_id of the DRAFT to inspect. Example: \"v_20260629_001\""
+          }
+        },
+        "required": ["draft_version_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "submit_change_file",
+      "description": "Submits a YAML patch file containing lineage changes (add/update/delete fields or edges). Creates a DRAFT version with all changes applied. Only accepts .yaml files.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Path to the .yaml patch file on the server filesystem."
+          },
+          "submitted_by": {
+            "type": "string",
+            "description": "Email of the submitter. Example: \"user@domain.com\""
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief reason for this change."
+          }
+        },
+        "required": ["file_path", "submitted_by", "description"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "generate_backfill_sql_for_field",
+      "description": "Generates a backfill SQL statement for a target DDM field by tracing its full upstream lineage and assembling a CTE-based SELECT/JOIN/WHERE query.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "field_id": {
+            "type": "string",
+            "description": "The target field in SCHEMA.TABLE.FIELD or TABLE.FIELD format. Example: \"CRDM_DDM.F_PARTICIPANTS.CUSTOMER_KEY\" or \"F_PARTICIPANTS.PARTICIPANT_KEY\""
+          }
+        },
+        "required": ["field_id"]
+      }
+    }
   }
 ]
