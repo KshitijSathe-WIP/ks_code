@@ -91,16 +91,19 @@ def _trim_empties(obj):
     return obj
 
 
-def _prepare_document(record: dict) -> dict:
+def _prepare_document(record: dict, version_id: str = "") -> dict:
     """
     Convert a record into a Cosmos DB document.
     - Set 'id' to edge_id for transformation_details, mapping_name for mapping_metadata
     - Ensure partition key field 'mapping_name' is present
     - Trim empty strings to keep the document compact
+    - Optionally tag the document with a version_id for source-control tracking
     """
     doc = dict(record)
     # Use edge_id if present (transformation_details), else mapping_name (mapping_metadata)
     doc["id"] = doc.get("edge_id") or doc.get("mapping_name") or doc.get("id", "unknown")
+    if version_id:
+        doc["version_id"] = version_id
     doc = _trim_empties(doc)
     return doc
 
@@ -148,10 +151,11 @@ def delete_container(client: CosmosClient, database_name: str, container_name: s
 # Load logic
 # ---------------------------------------------------------------------------
 
-def load_records(container, records: list[dict], dry_run: bool) -> dict:
+def load_records(container, records: list[dict], dry_run: bool, version_id: str = "") -> dict:
     """
     Upsert records into Cosmos DB in batches.
     Returns stats dict.
+    Pass version_id to tag each document for source-control versioning.
     """
     total    = len(records)
     upserted = 0
@@ -162,7 +166,7 @@ def load_records(container, records: list[dict], dry_run: bool) -> dict:
     for batch_start in range(0, total, BATCH_SIZE):
         batch = records[batch_start : batch_start + BATCH_SIZE]
         for record in batch:
-            doc = _prepare_document(record)
+            doc = _prepare_document(record, version_id=version_id)
 
             if dry_run:
                 skipped += 1
@@ -214,6 +218,11 @@ def main():
         "--replace", action="store_true",
         help="Delete and recreate the container before loading (full reload)"
     )
+    parser.add_argument(
+        "--version-id", default="", metavar="VERSION_ID",
+        help="Tag each document with this version_id for source-control tracking. "
+             "Obtain a version_id by running: python version_manager.py create ..."
+    )
     args = parser.parse_args()
 
     json_path = Path(args.json)
@@ -241,6 +250,10 @@ def main():
         print("No records to load. Exiting.")
         sys.exit(0)
 
+    version_id = args.version_id.strip()
+    if version_id:
+        print(f"  Version tag     : {version_id}")
+
     if args.dry_run:
         print("\n[DRY RUN] — no data will be written to Cosmos DB.")
         # Validate and report
@@ -249,10 +262,10 @@ def main():
         print(f"  Unique mappings : {len(mapping_names)}")
         print(f"  Unique folders  : {len(folder_names)}")
         print(f"  Sample edge_id  : {records[0].get('edge_id', 'n/a')}")
-        doc = _prepare_document(records[0])
+        doc = _prepare_document(records[0], version_id=version_id)
         approx_bytes = len(json.dumps(doc, ensure_ascii=False).encode("utf-8"))
         print(f"  Sample doc size : ~{approx_bytes:,} bytes")
-        result = load_records(None, records, dry_run=True)
+        result = load_records(None, records, dry_run=True, version_id=version_id)
         print(f"\nDry run complete. Would have loaded {result['total']} documents.")
         return
 
@@ -269,7 +282,7 @@ def main():
 
     # ── Upload ─────────────────────────────────────────────────────────────
     print(f"Uploading {len(records)} documents ...")
-    result = load_records(container, records, dry_run=False)
+    result = load_records(container, records, dry_run=False, version_id=version_id)
 
     # ── Summary ────────────────────────────────────────────────────────────
     print(f"\n{'─'*50}")
@@ -279,6 +292,8 @@ def main():
     print(f"  Elapsed         : {result['elapsed_s']} s")
     if result['total'] > 0:
         print(f"  Avg throughput  : {result['total'] / result['elapsed_s']:.1f} docs/s")
+    if version_id:
+        print(f"  Version tag     : {version_id}")
     print(f"{'─'*50}")
     print(f"\nDone. Query example:")
     print(f"  SELECT * FROM c WHERE c.edge_id = '<your_edge_id>'")

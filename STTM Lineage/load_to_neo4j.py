@@ -16,11 +16,16 @@ Environment variables (or override with CLI flags):
   NEO4J_PASSWORD — password
 
 Usage:
-  # Load using env vars:
+  # Load using env vars (version_id auto-defaults to v_YYYYMMDD_000):
   python load_to_neo4j.py --lineage "Output Files/sample_lineage.json"
+
+  # Load with explicit version_id:
+  python load_to_neo4j.py --lineage "Output Files/sample_lineage.json" ^
+      --version-id v_20260630_001
 
   # Load with explicit connection args:
   python load_to_neo4j.py --lineage "Output Files/sample_lineage.json" ^
+      --version-id v_20260630_001 ^
       --uri "neo4j+ssc://3ba85d38.databases.neo4j.io" ^
       --user neo4j --password "YOUR_PASSWORD"
 
@@ -54,7 +59,8 @@ SET f.db_schema            = row.db_schema,
     f.field_name           = row.field_name,
     f.layer                = row.layer,
     f.data_type            = row.data_type,
-    f.precision            = row.precision
+    f.precision            = row.precision,
+    f.version_id           = row.version_id
 """
 
 EDGE_MERGE_QUERY = """
@@ -66,7 +72,8 @@ SET r.mapping_name          = row.mapping_name,
     r.folder_name           = row.folder_name,
     r.transformation_name   = row.transformation_name,
     r.transformation_type   = row.transformation_type,
-    r.expression            = row.expression
+    r.expression            = row.expression,
+    r.version_id            = row.version_id
 """
 
 INDEX_QUERIES = [
@@ -93,10 +100,11 @@ def ensure_indexes(session) -> None:
     print("  Indexes ensured.")
 
 
-def load_vertices(session, vertices: list) -> None:
-    total = len(vertices)
+def load_vertices(session, vertices: list, version_id: str) -> None:
+    rows = [{**v, "version_id": version_id} for v in vertices]
+    total = len(rows)
     done = 0
-    for batch in _batches(vertices, BATCH_SIZE):
+    for batch in _batches(rows, BATCH_SIZE):
         session.run(VERTEX_MERGE_QUERY, rows=batch)
         done += len(batch)
         if done % 2000 == 0:
@@ -104,11 +112,12 @@ def load_vertices(session, vertices: list) -> None:
     print(f"  {total}/{total} vertices done")
 
 
-def load_edges(session, edges: list) -> None:
-    total = len(edges)
+def load_edges(session, edges: list, version_id: str) -> None:
+    rows = [{**e, "version_id": version_id} for e in edges]
+    total = len(rows)
     done = 0
     errors = 0
-    for batch in _batches(edges, BATCH_SIZE):
+    for batch in _batches(rows, BATCH_SIZE):
         try:
             session.run(EDGE_MERGE_QUERY, rows=batch)
         except Exception as ex:
@@ -136,11 +145,17 @@ def main():
                         help="Neo4j username (overrides NEO4J_USER env var, default: neo4j)")
     parser.add_argument("--password", default=None,
                         help="Neo4j password (overrides NEO4J_PASSWORD env var)")
+    parser.add_argument("--version-id", default=None,
+                        help="Version ID to tag all nodes/relationships (e.g. v_20260630_001). "
+                             "Defaults to today's baseline: v_YYYYMMDD_000")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print sample Cypher without connecting")
     parser.add_argument("--clear", action="store_true",
                         help="Delete all existing nodes and relationships before loading")
     args = parser.parse_args()
+
+    import datetime
+    version_id = args.version_id or f"v_{datetime.date.today().strftime('%Y%m%d')}_000"
 
     lineage_path = Path(args.lineage)
     if not lineage_path.exists():
@@ -159,17 +174,18 @@ def main():
 
     # --- Dry-run mode ---
     if args.dry_run:
+        print(f"\n[DRY RUN] version_id = {version_id}")
         print("\n[DRY RUN] Sample vertex MERGE (first record):")
         if vertices:
             v = vertices[0]
-            print(f"  MERGE (f:Field {{id: '{v['id']}'}}) SET f.layer = '{v['layer']}', ...")
+            print(f"  MERGE (f:Field {{id: '{v['id']}'}}) SET f.layer = '{v['layer']}', f.version_id = '{version_id}', ...")
         print("\n[DRY RUN] Sample edge MERGE (first record):")
         if edges:
             e = edges[0]
             print(
                 f"  MATCH (src:Field {{id: '{e['from_vertex']}'}}) "
                 f"MATCH (tgt:Field {{id: '{e['to_vertex']}'}}) "
-                f"MERGE (src)-[:TRANSFORMS_TO {{id: '{e['id']}'}}]->(tgt) SET ..."
+                f"MERGE (src)-[:TRANSFORMS_TO {{id: '{e['id']}'}}]->(tgt) SET r.version_id = '{version_id}', ..."
             )
         print("\nDry run complete.")
         return
@@ -212,11 +228,11 @@ def main():
             print("\nEnsuring indexes...")
             ensure_indexes(session)
 
-            print(f"\nUpserting {len(vertices)} vertices (batch size {BATCH_SIZE})...")
-            load_vertices(session, vertices)
+            print(f"\nUpserting {len(vertices)} vertices (batch size {BATCH_SIZE}, version_id={version_id})...")
+            load_vertices(session, vertices, version_id)
 
-            print(f"\nUpserting {len(edges)} edges (batch size {BATCH_SIZE})...")
-            load_edges(session, edges)
+            print(f"\nUpserting {len(edges)} edges (batch size {BATCH_SIZE}, version_id={version_id})...")
+            load_edges(session, edges, version_id)
     finally:
         driver.close()
 

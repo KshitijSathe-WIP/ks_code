@@ -145,6 +145,28 @@ def init_tools():
     except Exception as e:
         print(f"   ⚠️  Backfill SQL tool unavailable (continuing without it): {e}")
 
+    # ── Version management tools (additive, optional) ──────────────────
+    try:
+        import version_tools as vt
+        FUNCTION_REGISTRY.update({
+            "get_active_version_info":  vt.get_active_version_info,
+            "list_lineage_versions":    vt.list_lineage_versions,
+            "get_version_diff_summary": vt.get_version_diff_summary,
+        })
+        print("   ✅ Version management tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Version tools unavailable (continuing without them): {e}")
+
+    # ── Change submission tools (additive, optional) ───────────────────
+    try:
+        import change_tools as cht
+        FUNCTION_REGISTRY.update({
+            "submit_change_file": cht.submit_change_file,
+        })
+        print("   ✅ Change submission tools loaded")
+    except Exception as e:
+        print(f"   ⚠️  Change tools unavailable (continuing without them): {e}")
+
     TOOLS.extend([_build_tool_schema(fn) for fn in FUNCTION_REGISTRY.values()])
     TOOLS_LOADED = True
     return True
@@ -169,6 +191,8 @@ STRICT SCOPE RULE:
 - EXCEPTION: any message containing a name that looks like a transformation step (e.g. upd_INSERT, exp_TARGET,
   lkp_LOOKUP, fil_FILTER, rtr_ROUTER, SQ_Shortcut, m_TMP_to_DDM_*) is ALWAYS in scope — these are
   Informatica transformation names and are valid lineage questions. NEVER refuse these.
+- EXCEPTION: questions about lineage versions, version diffs, active version, draft changes, or change submissions
+  are ALWAYS in scope — these relate to the version-controlled lineage data store.
 
 You help users trace data flows across three layers:
 - TPR (source/transactional systems)
@@ -971,6 +995,89 @@ def health():
         "tools_loaded": TOOLS_LOADED,
         "active_sessions": len(sessions),
     })
+
+
+# ────────────────────────────────────────────────────────────
+# CHANGE SUBMISSION API  (YAML patch file only)
+# ────────────────────────────────────────────────────────────
+
+_YAML_TEMPLATE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "STTM Lineage"
+    / "lineage_patch_template.yaml"
+)
+
+
+@app.route("/api/change-template", methods=["GET"])
+def change_template():
+    """Return the YAML patch file template as plain text for download."""
+    if _YAML_TEMPLATE_PATH.exists():
+        return _YAML_TEMPLATE_PATH.read_text(encoding="utf-8"), 200, {
+            "Content-Type": "text/yaml; charset=utf-8",
+            "Content-Disposition": 'attachment; filename="lineage_patch_template.yaml"',
+        }
+    return jsonify({"error": "Template file not found on server"}), 404
+
+
+@app.route("/api/submit-change", methods=["POST"])
+def submit_change():
+    """
+    Accept a YAML patch file upload and submit all changes as a single DRAFT.
+
+    Request: multipart/form-data
+      file          — .yaml / .yml patch file (required)
+      submitted_by  — submitter email (optional; overrides value in the file)
+      description   — change description (optional; overrides value in the file)
+
+    Returns 201 with { version_id, status, message } on success.
+    """
+    if "file" not in request.files:
+        return jsonify({
+            "error": "No file uploaded. Send a .yaml patch file as multipart/form-data field 'file'.",
+            "hint": "GET /api/change-template to download the template.",
+        }), 400
+
+    uploaded = request.files["file"]
+    if not uploaded.filename:
+        return jsonify({"error": "Uploaded file has no filename."}), 400
+
+    fname = uploaded.filename.lower()
+    if not (fname.endswith(".yaml") or fname.endswith(".yml")):
+        return jsonify({
+            "error": f"Only .yaml / .yml files are accepted. Got: '{uploaded.filename}'",
+        }), 400
+
+    submitted_by = (request.form.get("submitted_by") or "").strip() or None
+    description  = (request.form.get("description")  or "").strip() or None
+
+    # Write to a secure temp file, process, then delete
+    import tempfile, os as _os
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".yaml", delete=False, mode="wb"
+        ) as tmp:
+            uploaded.save(tmp)
+            tmp_path = tmp.name
+
+        import change_tools as cht
+        result_json = cht.submit_change_file(
+            file_path    = tmp_path,
+            submitted_by = submitted_by,
+            description  = description,
+        )
+        result = json.loads(result_json)
+        if "error" in result:
+            return jsonify(result), 422
+        return jsonify(result), 201
+
+    except ImportError as exc:
+        return jsonify({"error": f"Change tools unavailable: {exc}"}), 503
+    except Exception as exc:
+        return jsonify({"error": f"Change submission failed: {exc}"}), 500
+    finally:
+        if tmp_path and _os.path.exists(tmp_path):
+            _os.unlink(tmp_path)
 
 
 # ────────────────────────────────────────────────────────────

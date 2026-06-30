@@ -24,6 +24,7 @@ import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from active_version import get as _get_active_version
 
 # Load .env (one level up from core_files/)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -55,8 +56,20 @@ def _get_container():
 
 
 def _run_cosmos_query(sql: str, parameters: list | None = None) -> str:
-    """Execute a Cosmos SQL query and return JSON string of results."""
+    """Execute a Cosmos SQL query and return JSON string of results.
+    Automatically injects a version_id filter into the SQL WHERE clause
+    when an ACTIVE version is registered, so Cosmos only scans/returns
+    relevant documents (server-side push-down, saves RU cost)."""
     container = _get_container()
+    if parameters is None:
+        parameters = []
+    # Phase 5 — inject version_id into SQL server-side
+    vid = _get_active_version()
+    if vid:
+        # Append AND clause — works because every tool query already has a WHERE.
+        # Handles both 'WHERE ... ORDER BY' and 'WHERE ... OFFSET'.
+        sql = _inject_version_filter(sql, vid)
+        parameters = parameters + [{"name": "@__vid", "value": vid}]
     kwargs: dict = {"query": sql, "enable_cross_partition_query": True}
     if parameters:
         kwargs["parameters"] = parameters
@@ -66,6 +79,26 @@ def _run_cosmos_query(sql: str, parameters: list | None = None) -> str:
         for k in ("_rid", "_self", "_etag", "_attachments", "_ts"):
             r.pop(k, None)
     return json.dumps(results, ensure_ascii=False, indent=2)
+
+
+def _inject_version_filter(sql: str, vid: str) -> str:
+    """Insert 'AND c.version_id = @__vid' into an existing SQL WHERE clause.
+    Handles ORDER BY, OFFSET, GROUP BY trailing clauses."""
+    import re
+    # Find the last WHERE in the query, then insert before ORDER/OFFSET/GROUP/LIMIT
+    upper = sql.upper()
+    # Find position to insert: just before ORDER BY / OFFSET / GROUP BY / LIMIT,
+    # or at the end of the query if none of those exist.
+    pattern = re.compile(
+        r'\b(ORDER\s+BY|OFFSET|GROUP\s+BY|LIMIT)\b', re.IGNORECASE
+    )
+    m = pattern.search(sql)
+    if m:
+        insert_pos = m.start()
+    else:
+        insert_pos = len(sql)
+    clause = " AND c.version_id = @__vid "
+    return sql[:insert_pos] + clause + sql[insert_pos:]
 
 
 # ─── Tool 1: Get full transformation details for one edge ───
@@ -386,6 +419,11 @@ def get_edges_for_vertex_pairs(vertex_pairs: list[tuple[str, str]]) -> list[dict
             {"name": "@fv", "value": from_v.upper()},
             {"name": "@tv", "value": to_v.upper()},
         ]
+        # Phase 5 — push version filter into SQL server-side
+        vid = _get_active_version()
+        if vid:
+            sql += " AND c.version_id = @vid"
+            params.append({"name": "@vid", "value": vid})
         try:
             rows = list(container.query_items(
                 query=sql, parameters=params, enable_cross_partition_query=True

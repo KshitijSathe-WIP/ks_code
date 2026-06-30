@@ -569,6 +569,8 @@
             </div>
         </div>
         <div class="header-actions">
+            <button class="btn" onclick="openChangeModal()">📝 Submit Change</button>
+            <a class="btn" href="/api/change-template" download="lineage_patch_template.yaml" style="text-decoration:none">📄 Template</a>
             <button class="btn" onclick="newSession()">New Chat</button>
         </div>
     </div>
@@ -1073,6 +1075,114 @@
             const welcome = document.getElementById('welcome');
             if (welcome) welcome.style.display = '';
         }
+
+        // ─── Change Submission Modal (YAML Upload) ──────────────
+
+        function openChangeModal() {
+            document.getElementById('changeModal').style.display = 'flex';
+            document.getElementById('changeResult').textContent = '';
+            document.getElementById('changeResult').className = 'change-result';
+        }
+
+        function closeChangeModal() {
+            document.getElementById('changeModal').style.display = 'none';
+            document.getElementById('changeResult').textContent = '';
+            document.getElementById('changeResult').className = 'change-result';
+        }
+
+        async function submitChangeFile() {
+            const fileInput = document.getElementById('changeFile');
+            const submitter = document.getElementById('changeSubmitter').value.trim();
+            const description = document.getElementById('changeDescription').value.trim();
+            const resultEl = document.getElementById('changeResult');
+
+            if (!fileInput.files.length) { resultEl.className = 'change-result error'; resultEl.textContent = 'Error: Please select a .yaml file.'; return; }
+            if (!submitter) { resultEl.className = 'change-result error'; resultEl.textContent = 'Error: Submitted By is required.'; return; }
+            if (!description) { resultEl.className = 'change-result error'; resultEl.textContent = 'Error: Description is required.'; return; }
+
+            const file = fileInput.files[0];
+            if (!file.name.endsWith('.yaml') && !file.name.endsWith('.yml')) {
+                resultEl.className = 'change-result error';
+                resultEl.textContent = 'Error: Only .yaml / .yml files are accepted.';
+                return;
+            }
+
+            resultEl.className = 'change-result';
+            resultEl.textContent = 'Submitting...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('submitted_by', submitter);
+            formData.append('description', description);
+
+            try {
+                const res = await fetch('/api/submit-change', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    resultEl.className = 'change-result success';
+                    resultEl.textContent = `✅ ${data.message || 'Change submitted.'}\n\nVersion ID: ${data.version_id || 'N/A'}`;
+                    fileInput.value = '';
+                } else {
+                    resultEl.className = 'change-result error';
+                    resultEl.textContent = `❌ ${data.error || 'Submission failed.'}`;
+                }
+            } catch (e) {
+                resultEl.className = 'change-result error';
+                resultEl.textContent = `❌ Network error: ${e.message}`;
+            }
+        }
     </script>
+
+    <!-- Change Submission Modal (YAML Upload) -->
+    <div id="changeModal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📝 Submit Lineage Change</h2>
+                <button class="modal-close" onclick="closeChangeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+                    Upload a YAML patch file describing your changes.
+                    Use the <strong>📄 Template</strong> button in the header to download a blank template.
+                </p>
+                <div class="form-group">
+                    <label for="changeFile">YAML Patch File *</label>
+                    <input type="file" id="changeFile" class="form-input" accept=".yaml,.yml" />
+                </div>
+                <div class="form-group">
+                    <label for="changeSubmitter">Submitted By (email) *</label>
+                    <input type="email" id="changeSubmitter" class="form-input" placeholder="user@domain.com" />
+                </div>
+                <div class="form-group">
+                    <label for="changeDescription">Description / Reason *</label>
+                    <input type="text" id="changeDescription" class="form-input" placeholder="Brief reason for this change" />
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-accent" onclick="submitChangeFile()">Upload &amp; Submit</button>
+                </div>
+                <pre id="changeResult" class="change-result"></pre>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:9999; }
+        .modal-content { background:var(--bg-primary); border-radius:12px; width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border); }
+        .modal-header h2 { font-size:16px; }
+        .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-secondary); }
+        .modal-body { padding:20px; }
+        .form-group { margin-bottom:12px; }
+        .form-group label { display:block; font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+        .form-input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; background:var(--bg-primary); }
+        .form-input:focus { outline:none; border-color:var(--accent); }
+        .modal-actions { display:flex; gap:8px; margin-top:16px; }
+        .change-result { margin-top:12px; padding:10px; border-radius:6px; font-size:12px; font-family:'Cascadia Code',monospace; white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto; background:var(--bg-secondary); }
+        .change-result.success { background:#e8f5e9; color:#1b5e20; }
+        .change-result.error { background:#ffebee; color:#b71c1c; }
+    </style>
 </body>
 </html>
