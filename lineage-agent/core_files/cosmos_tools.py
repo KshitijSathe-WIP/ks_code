@@ -24,7 +24,7 @@ import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from active_version import get as _get_active_version
+from active_version import get as _get_active_version, get_cosmos_data_version as _get_cosmos_data_version
 
 # Load .env (one level up from core_files/)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -37,8 +37,6 @@ _cosmos_client = None
 _container     = None
 _DATABASE      = "lineage"
 _CONTAINER     = "transformation_details"
-
-
 def _get_container():
     global _cosmos_client, _container
     if _container is not None:
@@ -55,29 +53,108 @@ def _get_container():
     return _container
 
 
+# ── Patch-delta cache ─────────────────────────────────────────────────────
+# Loaded once per active version and reused across all queries in a request.
+# Maps  (edge_id, property) → new_value  for all UPDATE deltas in the active patch.
+_patch_overrides_cache: dict | None = None
+_patch_overrides_version: str | None = None   # which patch version the cache is for
+
+
+def _get_patch_overrides() -> dict:
+    """
+    Return a dict mapping (edge_id, property) → new_value for every UPDATE
+    delta record in the currently active PATCH version.
+
+    Returns an empty dict when the active version is a full-load (no deltas).
+    Result is cached until the active version changes.
+    """
+    global _patch_overrides_cache, _patch_overrides_version
+
+    active_vid = _get_active_version()
+    data_vid   = _get_cosmos_data_version()
+
+    # No patch in play when active == data (full-load version is active)
+    if not active_vid or active_vid == data_vid:
+        return {}
+
+    # Return cached map if still valid for this patch version
+    if _patch_overrides_version == active_vid and _patch_overrides_cache is not None:
+        return _patch_overrides_cache
+
+    try:
+        container = _get_container()
+        deltas = list(container.query_items(
+            query=(
+                "SELECT c.edge_id, c.property, c.new_value "
+                "FROM c "
+                "WHERE c.version_id = @vid "
+                "  AND c.doc_type   = 'edge_change' "
+                "  AND c.operation  = 'UPDATE'"
+            ),
+            parameters=[{"name": "@vid", "value": active_vid}],
+            enable_cross_partition_query=True,
+        ))
+        overrides = {(d["edge_id"], d["property"]): d["new_value"] for d in deltas}
+        _patch_overrides_cache   = overrides
+        _patch_overrides_version = active_vid
+        return overrides
+    except Exception:
+        return {}
+
+
+def _apply_patch_overrides(results: list) -> list:
+    """
+    For each document in results that has an edge_id, apply any active-patch
+    UPDATE deltas in-place, overwriting the stale base-version property value.
+
+    Example:
+      Base doc  : { edge_id: "A__to__B__m_MAPPING", lookup_condition: "X = 1" }
+      Delta     : { edge_id: "A__to__B__m_MAPPING", property: "lookup_condition",
+                    new_value: "X = 1 AND FLAG = 'Y'" }
+      After     : { edge_id: "A__to__B__m_MAPPING", lookup_condition: "X = 1 AND FLAG = 'Y'" }
+    """
+    overrides = _get_patch_overrides()
+    if not overrides:
+        return results
+
+    for doc in results:
+        edge_id = doc.get("edge_id") or doc.get("id", "")
+        if not edge_id:
+            continue
+        for (eid, prop), new_val in overrides.items():
+            if eid == edge_id and prop in doc:
+                doc[prop] = new_val
+
+    return results
+
+
 def _run_cosmos_query(sql: str, parameters: list | None = None) -> str:
     """Execute a Cosmos SQL query and return JSON string of results.
-    Automatically injects a version_id filter into the SQL WHERE clause
-    when an ACTIVE version is registered, so Cosmos only scans/returns
-    relevant documents (server-side push-down, saves RU cost)."""
+
+    Two-step version resolution:
+    1. Filter by the BASE full-load version (so patch-only active versions, which
+       only contain delta audit records, don't hide the 9,000+ full documents).
+    2. Apply any active-patch UPDATE deltas on top of the returned documents, so
+       patched properties reflect the approved change rather than the old base value.
+    """
     container = _get_container()
     if parameters is None:
         parameters = []
-    # Phase 5 — inject version_id into SQL server-side
-    vid = _get_active_version()
+    # Step 1 — query the base full-load version
+    vid = _get_cosmos_data_version()
     if vid:
-        # Append AND clause — works because every tool query already has a WHERE.
-        # Handles both 'WHERE ... ORDER BY' and 'WHERE ... OFFSET'.
         sql = _inject_version_filter(sql, vid)
         parameters = parameters + [{"name": "@__vid", "value": vid}]
     kwargs: dict = {"query": sql, "enable_cross_partition_query": True}
     if parameters:
         kwargs["parameters"] = parameters
     results = list(container.query_items(**kwargs))
-    # Strip Cosmos internal metadata fields from output
+    # Strip Cosmos internal metadata fields
     for r in results:
         for k in ("_rid", "_self", "_etag", "_attachments", "_ts"):
             r.pop(k, None)
+    # Step 2 — overlay any approved patch deltas
+    results = _apply_patch_overrides(results)
     return json.dumps(results, ensure_ascii=False, indent=2)
 
 
