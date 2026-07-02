@@ -11,24 +11,28 @@
 
 import json
 from neo4j_client import Neo4jLineageClient
-from active_version import get as _get_active_version
+from active_version import get as _get_active_version, get_neo4j_version as _get_neo4j_version
 
 neo4j_client = Neo4jLineageClient()
 
 
 def _ver(alias: str = "f") -> tuple[str, str, dict]:
     """
-    Returns (ver_where, ver_and, extra_params) for injecting an active-version
+    Returns (ver_where, ver_and, extra_params) for injecting a version
     filter into Cypher queries.
+
+    Uses the version_id that is actually present on Neo4j nodes (read
+    from the graph itself) rather than the Cosmos active version.  This
+    keeps Neo4j queries working even when a new Cosmos version has been
+    approved but the graph has not been reloaded.
 
     ver_where — standalone WHERE clause  (use when query has no existing WHERE)
     ver_and   — AND clause fragment      (append to an existing WHERE clause)
     extra_params — {'version_id': vid}  (merge into the query params dict)
 
-    All three are empty / {} when no ACTIVE version is registered, which keeps
-    all queries working exactly as before (no version filter applied).
+    All three are empty / {} when no version is found on Neo4j nodes.
     """
-    vid = _get_active_version()
+    vid = _get_neo4j_version()
     if vid:
         return (
             f"WHERE {alias}.version_id = $version_id",
