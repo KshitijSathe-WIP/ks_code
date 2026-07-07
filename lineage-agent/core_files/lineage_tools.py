@@ -206,8 +206,11 @@ def query_column_lineage(field_name: str, table_name: str, direction: str = "bot
                 merged.append(row)
         return _json.dumps(merged, ensure_ascii=False, indent=2)
 
-    # If field_name contains dots, treat it as the node's id property
-    vid = _get_active_version()
+    # If field_name contains dots, treat it as the node's id property.
+    # Use _get_neo4j_version() (same as _ver()) so the filter matches the
+    # version actually loaded on the graph — not the Cosmos active version
+    # which may differ when a new version is approved but not yet reloaded.
+    vid = _get_neo4j_version()
     _ver_suffix = f"\n        WHERE anchor.version_id = $version_id" if vid else ""
     _vp = {"version_id": vid} if vid else {}
 
