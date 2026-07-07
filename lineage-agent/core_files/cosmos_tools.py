@@ -496,8 +496,9 @@ def get_edges_for_vertex_pairs(vertex_pairs: list[tuple[str, str]]) -> list[dict
             {"name": "@fv", "value": from_v.upper()},
             {"name": "@tv", "value": to_v.upper()},
         ]
-        # Phase 5 — push version filter into SQL server-side
-        vid = _get_active_version()
+        # Use the base full-load version (same as _run_cosmos_query) so that
+        # PATCH-version-active scenarios don't miss the full documents.
+        vid = _get_cosmos_data_version()
         if vid:
             sql += " AND c.version_id = @vid"
             params.append({"name": "@vid", "value": vid})
@@ -512,4 +513,6 @@ def get_edges_for_vertex_pairs(vertex_pairs: list[tuple[str, str]]) -> list[dict
         except Exception as e:
             print(f"   [cosmos] ⚠️  Edge query failed for {from_v}→{to_v}: {e}")
 
+    # Step 2 — overlay any approved patch deltas (same as _run_cosmos_query)
+    results = _apply_patch_overrides(results)
     return results

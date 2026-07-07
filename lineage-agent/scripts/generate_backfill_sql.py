@@ -30,6 +30,8 @@ sys.path.insert(0, str(_SCRIPT_DIR / "core_files"))
 from neo4j_client import Neo4jLineageClient
 from azure.cosmos import CosmosClient
 
+from active_version import get_cosmos_data_version as _get_cosmos_data_version, get_neo4j_version as _get_neo4j_version
+
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -70,8 +72,12 @@ class LineageDataAccess:
 
     def get_upstream_edges(self, field_id: str) -> list:
         """Get all upstream edges for a field from Neo4j (backward traversal)."""
-        cypher = """
-            MATCH (anchor:Field {id: $field_id})
+        vid = _get_neo4j_version()
+        ver_clause = "WHERE anchor.version_id = $version_id" if vid else ""
+        ver_params = {"version_id": vid} if vid else {}
+        cypher = f"""
+            MATCH (anchor:Field {{id: $field_id}})
+            {ver_clause}
             MATCH path = (source:Field)-[:TRANSFORMS_TO*1..10]->(anchor)
             UNWIND range(0, length(path)-1) AS idx
             WITH relationships(path)[idx] AS rel,
@@ -95,13 +101,17 @@ class LineageDataAccess:
                    rel.expression           AS expression
             ORDER BY from_layer ASC, from_table ASC
         """
-        result = self.neo4j.run_cypher(cypher, {"field_id": field_id})
+        result = self.neo4j.run_cypher(cypher, {"field_id": field_id, **ver_params})
         return json.loads(result)
 
     def get_transformation_details(self, edge_id: str) -> dict | None:
         """Get full transformation chain from Cosmos DB for an edge."""
         sql = "SELECT * FROM c WHERE c.id = @edge_id"
         params = [{"name": "@edge_id", "value": edge_id}]
+        vid = _get_cosmos_data_version()
+        if vid:
+            sql += " AND c.version_id = @vid"
+            params.append({"name": "@vid", "value": vid})
         results = list(self.cosmos.query_items(
             query=sql, parameters=params, enable_cross_partition_query=True
         ))
@@ -121,6 +131,10 @@ class LineageDataAccess:
             FROM c WHERE c.to_vertex = @to_vertex
         """
         params = [{"name": "@to_vertex", "value": to_vertex}]
+        vid = _get_cosmos_data_version()
+        if vid:
+            sql += " AND c.version_id = @vid"
+            params.append({"name": "@vid", "value": vid})
         results = list(self.cosmos.query_items(
             query=sql, parameters=params, enable_cross_partition_query=True
         ))
@@ -773,30 +787,35 @@ def resolve_field_id(dao: LineageDataAccess, field_input: str, table_input: str 
     if field_input.count(".") == 2:
         return field_input.upper()
 
+    vid = _get_neo4j_version()
+    ver_clause = "AND f.version_id = $version_id" if vid else ""
+    ver_params = {"version_id": vid} if vid else {}
+
     # TABLE.FIELD format
     if field_input.count(".") == 1:
         table, field = field_input.split(".", 1)
-        # Search Neo4j for the DDM version first
-        cypher = """
-            MATCH (f:Field {table_name: $table, field_name: $field})
+        cypher = f"""
+            MATCH (f:Field {{table_name: $table, field_name: $field}})
+            WHERE 1=1 {ver_clause}
             RETURN f.id AS id, f.layer AS layer
             ORDER BY CASE f.layer WHEN 'DDM' THEN 0 WHEN 'TT' THEN 1 ELSE 2 END
             LIMIT 1
         """
-        result = json.loads(dao.neo4j.run_cypher(cypher, {"table": table.upper(), "field": field.upper()}))
+        result = json.loads(dao.neo4j.run_cypher(cypher, {"table": table.upper(), "field": field.upper(), **ver_params}))
         if result:
             return result[0]["id"]
         raise ValueError(f"Field not found: {table}.{field}")
 
     # Bare field name with separate table
     if table_input:
-        cypher = """
-            MATCH (f:Field {table_name: $table, field_name: $field})
+        cypher = f"""
+            MATCH (f:Field {{table_name: $table, field_name: $field}})
+            WHERE 1=1 {ver_clause}
             RETURN f.id AS id, f.layer AS layer
             ORDER BY CASE f.layer WHEN 'DDM' THEN 0 WHEN 'TT' THEN 1 ELSE 2 END
             LIMIT 1
         """
-        result = json.loads(dao.neo4j.run_cypher(cypher, {"table": table_input.upper(), "field": field_input.upper()}))
+        result = json.loads(dao.neo4j.run_cypher(cypher, {"table": table_input.upper(), "field": field_input.upper(), **ver_params}))
         if result:
             return result[0]["id"]
         raise ValueError(f"Field not found: {table_input}.{field_input}")
