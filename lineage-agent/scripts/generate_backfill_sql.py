@@ -304,9 +304,15 @@ class BackfillSQLGenerator:
 
         for i, mapping_name in enumerate(mappings_ordered):
             edges = mapping_edges[mapping_name]
-            cosmos_doc = self._get_cosmos_for_edge(edges[0])
+            # Build a per-edge cosmos doc lookup so each edge uses its own
+            # final_expression, and joins/filters aggregate across all of them.
+            edge_cosmos = {}
+            for e in edges:
+                doc = self._get_cosmos_for_edge(e)
+                if doc:
+                    edge_cosmos[f"{e['from_id']}__to__{e['to_id']}__{e['mapping_name']}"] = doc
             mapping_meta = self.mapping_metadata.get(mapping_name)
-            cte = self._build_mapping_cte(mapping_name, edges, cosmos_doc, mapping_meta, i, prior_cte_by_table)
+            cte = self._build_mapping_cte(mapping_name, edges, edge_cosmos, mapping_meta, i, prior_cte_by_table)
             if cte:
                 # Register every target table this CTE produces
                 for e in edges:
@@ -334,9 +340,15 @@ class BackfillSQLGenerator:
 
         return "\n".join(sql_lines)
 
-    def _build_mapping_cte(self, mapping_name: str, edges: list, cosmos_doc: dict | None, mapping_meta: dict | None, index: int,
+    def _build_mapping_cte(self, mapping_name: str, edges: list, edge_cosmos: dict, mapping_meta: dict | None, index: int,
                             prior_cte_by_table: dict | None = None) -> dict | None:
-        """Build one CTE representing a single mapping's transformation logic."""
+        """Build one CTE representing a single mapping's transformation logic.
+
+        :param edge_cosmos: Dict mapping edge_id → cosmos doc for each edge in
+                            this mapping's lineage path. Each edge uses its own
+                            doc for expression translation; joins/filters aggregate
+                            across all docs.
+        """
         # Determine source and target tables from edges
         source_tables = set()
         target_tables = set()
@@ -348,10 +360,14 @@ class BackfillSQLGenerator:
             source_tables.add(src)
             target_tables.add(tgt)
 
-            # Build SELECT expression from transformation
-            expr = self._translate_expression(e, cosmos_doc, mapping_meta)
+            # Each edge uses its OWN cosmos doc for final_expression
+            eid = f"{e['from_id']}__to__{e['to_id']}__{e['mapping_name']}"
+            edge_doc = edge_cosmos.get(eid)
+            expr = self._translate_expression(e, edge_doc, mapping_meta)
             alias = e["to_field"]
             select_exprs[alias] = expr
+
+        cosmos_docs = list(edge_cosmos.values())
 
         # CTE name derived from mapping
         cte_name = self._sanitize_cte_name(mapping_name, index)
@@ -369,27 +385,35 @@ class BackfillSQLGenerator:
                 select_items.append(f"    {alias}")
         body_lines.append(",\n".join(select_items))
 
-        # FROM clause — use the driving table identified from join conditions.
-        # If a prior CTE already produced this table, read from that CTE and alias
-        # it as the original bare table name so existing column references stay valid.
-        from_table = self._find_driving_table(cosmos_doc, source_tables)
+        # FROM clause — scan all cosmos docs to find the SQ join condition
+        # and identify the driving table.
+        from_table = self._find_driving_table(source_tables, cosmos_docs)
         from_bare  = from_table.split('.')[-1].upper()
         if prior_cte_by_table and from_bare in prior_cte_by_table:
             body_lines.append(f"FROM {prior_cte_by_table[from_bare]} AS {from_bare}")
         else:
             body_lines.append(f"FROM {from_table}")
 
-        # JOIN clauses (from lookup conditions and join conditions in Cosmos)
-        joins = self._extract_joins(cosmos_doc, source_tables, from_table=from_table)
+        # JOIN clauses — scan all cosmos docs so lookup joins on specific
+        # fields (e.g. lkp_MAST_LOAN_REC on CUST_NTE_NBR) are captured.
+        joins = self._extract_joins(source_tables, cosmos_docs, from_table=from_table)
         if joins:
             body_lines.extend(joins)
 
         # WHERE clause (from filter conditions)
-        where_clauses = self._extract_filters(cosmos_doc, edges, mapping_meta)
+        where_clauses = self._extract_filters(cosmos_docs, edges, mapping_meta)
         if where_clauses:
             body_lines.append("WHERE " + "\n  AND ".join(where_clauses))
 
         return {"name": cte_name, "body": "\n".join(body_lines)}
+
+    # Transformation types that are NOT real expressions — when final_expression
+    # is one of these, walk the chain backward for the actual port_expression.
+    _NON_EXPR_TYPES = {
+        "Source Qualifier", "Router", "Update Strategy", "Filter",
+        "Sequence Generator", "Joiner", "Normalizer", "Sorter",
+        "Union", "Rank",
+    }
 
     def _translate_expression(self, edge: dict, cosmos_doc: dict | None, mapping_meta: dict | None = None) -> str:
         """Convert an Informatica expression to SQL-compatible expression."""
@@ -397,13 +421,28 @@ class BackfillSQLGenerator:
         from_field = edge["from_field"]
         to_field = edge["to_field"]
 
-        # If we have Cosmos details, prefer the final_expression
         if cosmos_doc:
             final = cosmos_doc.get("final_expression", "")
-            if final and final != "Source Qualifier":
+            if final and final not in self._NON_EXPR_TYPES:
+                # final_expression is a real expression — use it
                 raw_expr = final
+            else:
+                # final_expression is a type name or empty — walk the chain
+                # backward for the last step that has a real port_expression.
+                chain = cosmos_doc.get("transformation_chain", [])
+                for step in reversed(chain):
+                    pe = step.get("port_expression", "") or ""
+                    step_type = step.get("transformation_type", "")
+                    # Skip empty expressions and non-expression step types
+                    if pe and pe not in self._NON_EXPR_TYPES and step_type not in self._NON_EXPR_TYPES:
+                        # Skip trivial pass-throughs (output == input) — keep
+                        # looking for a real computation further upstream.
+                        inp = step.get("input_port", "")
+                        if pe.upper() != inp.upper():
+                            raw_expr = pe
+                            break
 
-        if not raw_expr or raw_expr == "Source Qualifier":
+        if not raw_expr or raw_expr in self._NON_EXPR_TYPES:
             # Direct pass-through
             return from_field
 
@@ -472,62 +511,54 @@ class BackfillSQLGenerator:
 
         return sql
 
-    def _extract_joins(self, cosmos_doc: dict | None, source_tables: set, from_table: str = "") -> list:
-        """Extract JOIN clauses from Cosmos transformation chain."""
+    def _extract_joins(self, source_tables: set, cosmos_docs: list, from_table: str = "") -> list:
+        """Extract JOIN clauses from all cosmos docs for this mapping's lineage edges."""
         joins = []
-        if not cosmos_doc:
-            return joins
-
-        # Bare name of the driving (FROM) table, used to avoid self-joins
         driving_bare = from_table.split('.')[-1].upper() if from_table else ""
-
-        chain = cosmos_doc.get("transformation_chain", [])
         seen_lookup_tables: set = set()
         seen_ud_joins: set = set()
 
-        for step in chain:
-            # Lookup-based joins: translate Informatica port names to qualified columns
-            lookup_cond = step.get("lookup_condition", "")
-            lookup_table = step.get("lookup_table_name", "")
-            if lookup_cond and lookup_table and lookup_table not in seen_lookup_tables:
-                seen_lookup_tables.add(lookup_table)
-                join_cond = self._translate_join_condition(lookup_cond, lookup_table, source_table=driving_bare)
-                joins.append(f"LEFT JOIN {lookup_table} ON {join_cond}")
+        for doc in cosmos_docs:
+            chain = doc.get("transformation_chain", [])
 
-            # User-defined joins from Source Qualifier: parse Oracle (+) → ANSI LEFT/INNER JOIN
-            join_condition = step.get("join_condition", "")
-            if not join_condition:
-                raw_attrs = step.get("raw_attributes", {})
-                join_condition = raw_attrs.get("User Defined Join", "")
-            if join_condition and join_condition not in seen_ud_joins:
-                seen_ud_joins.add(join_condition)
-                join_map = self._parse_oracle_outer_joins(join_condition, driving_bare=driving_bare)
-                for joined_table, info in join_map.items():
-                    cond_str = " AND ".join(info["conditions"])
-                    joins.append(f"{info['type']} {joined_table} ON {cond_str}")
+            for step in chain:
+                lookup_cond = step.get("lookup_condition", "")
+                lookup_table = step.get("lookup_table_name", "")
+                if lookup_cond and lookup_table and lookup_table not in seen_lookup_tables:
+                    seen_lookup_tables.add(lookup_table)
+                    join_cond = self._translate_join_condition(lookup_cond, lookup_table, source_table=driving_bare)
+                    joins.append(f"LEFT JOIN {lookup_table} ON {join_cond}")
+
+                join_condition = step.get("join_condition", "")
+                if not join_condition:
+                    raw_attrs = step.get("raw_attributes", {})
+                    join_condition = raw_attrs.get("User Defined Join", "")
+                if join_condition and join_condition not in seen_ud_joins:
+                    seen_ud_joins.add(join_condition)
+                    join_map = self._parse_oracle_outer_joins(join_condition, driving_bare=driving_bare)
+                    for joined_table, info in join_map.items():
+                        cond_str = " AND ".join(info["conditions"])
+                        joins.append(f"{info['type']} {joined_table} ON {cond_str}")
 
         return joins
 
-    def _extract_filters(self, cosmos_doc: dict | None, edges: list, mapping_meta: dict | None = None) -> list:
+    def _extract_filters(self, cosmos_docs: list, edges: list, mapping_meta: dict | None = None) -> list:
         """Extract WHERE clause conditions from filter/SQ filter conditions."""
         filters = []
         seen = set()
 
-        if cosmos_doc:
-            # Top-level filter
-            flt = cosmos_doc.get("filter_condition", "")
+        for doc in cosmos_docs:
+            flt = doc.get("filter_condition", "")
             if flt and flt not in seen:
                 seen.add(flt)
                 filters.append(flt)
 
-            # Chain-level filters
-            for step in cosmos_doc.get("transformation_chain", []):
+            for step in doc.get("transformation_chain", []):
                 flt = step.get("filter_condition", "")
                 if flt and flt not in seen:
                     seen.add(flt)
                     filters.append(flt)
 
-                # Source filter from raw_attributes
                 raw_attrs = step.get("raw_attributes", {})
                 src_filter = raw_attrs.get("Source Filter", "")
                 if src_filter and src_filter not in seen:
@@ -675,15 +706,16 @@ class BackfillSQLGenerator:
 
         return join_map
 
-    def _find_driving_table(self, cosmos_doc: dict | None, source_tables: set) -> str:
+    def _find_driving_table(self, source_tables: set, cosmos_docs: list) -> str:
         """
         Identify the driving (FROM) table by inspecting the Source Qualifier join condition.
         The driving table is the one that never appears on the (+) / outer side.
         Falls back to the first alphabetically sorted source table if no join condition exists.
         """
         import re
-        if cosmos_doc:
-            for step in cosmos_doc.get("transformation_chain", []):
+
+        for doc in cosmos_docs:
+            for step in doc.get("transformation_chain", []):
                 join_cond = step.get("join_condition", "")
                 if not join_cond:
                     raw_attrs = step.get("raw_attributes", {})
