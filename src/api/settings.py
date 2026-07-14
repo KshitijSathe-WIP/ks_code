@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     )
     
     # Cosmos DB Configuration
-    azure_cosmos_endpoint: str
+    azure_cosmos_endpoint: Optional[str] = None
     azure_cosmos_key: Optional[str] = None  # If not provided, uses DefaultAzureCredential
     azure_cosmos_database: str = "IncidentRCA"
     azure_cosmos_incident_container: str = "historical-incidents"
