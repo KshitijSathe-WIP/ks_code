@@ -6,11 +6,11 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "incidentDescription": {
+        "incident_description": {
           "type": "string",
           "description": "The user's complete incident description. Can be short and nontechnical (e.g., 'Mobile banking app not working'). Preserve the original user text without modification."
         },
-        "topIncidentCount": {
+        "top_incident_count": {
           "type": "integer",
           "description": "Maximum number of historical incidents to return. Default is 3. Lower values focus on top matches, higher values provide more context.",
           "minimum": 1,
@@ -18,7 +18,7 @@
           "default": 3
         }
       },
-      "required": ["incidentDescription"],
+      "required": ["incident_description"],
       "additionalProperties": false
     }
   }
