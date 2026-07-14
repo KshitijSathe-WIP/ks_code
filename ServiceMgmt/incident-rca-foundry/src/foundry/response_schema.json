@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RCA Response Schema",
+  "description": "Structured response for Incident Root Cause Analysis results",
+  "type": "object",
+  "properties": {
+    "rootCause": {
+      "type": "string",
+      "description": "The most probable root cause based on grounded historical evidence. Must come from historical incident data, never invented.",
+      "minLength": 10,
+      "maxLength": 500
+    },
+    "rootCauseCategory": {
+      "type": "string",
+      "description": "High-level category of the root cause",
+      "enum": [
+        "Application",
+        "Database",
+        "Network",
+        "Infrastructure",
+        "Configuration",
+        "Security",
+        "Data Quality",
+        "Integration",
+        "Performance",
+        "Unknown"
+      ]
+    },
+    "confidence": {
+      "type": "integer",
+      "description": "Confidence level in the root cause determination (0-100). 90-100: strong specific match, 65-79: broad input with probable cause, 0: no meaningful match",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "matchedIncidentIds": {
+      "type": "array",
+      "description": "Array of historical incident IDs that support this root cause. Must be exact IDs from the retrieval tool output. Can be empty if confidence is 0.",
+      "items": {
+        "type": "string",
+        "pattern": "^INC\\d{5}$"
+      },
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "relatedChangeId": {
+      "type": "string",
+      "description": "Related change record ID if changeCorrelation is true, otherwise empty string. Must be exact ID from tool output.",
+      "pattern": "^(CHG\\d{5})?$"
+    },
+    "changeCorrelation": {
+      "type": "boolean",
+      "description": "True only if a related change was found with supporting evidence (changeSupported: true from tool). False if no change, or change does not support the root cause."
+    },
+    "evidence": {
+      "type": "array",
+      "description": "List of evidence statements supporting the root cause determination. Each item should be a concise factual statement from the retrieval tool output.",
+      "items": {
+        "type": "string",
+        "minLength": 5,
+        "maxLength": 200
+      },
+      "minItems": 1,
+      "maxItems": 10
+    }
+  },
+  "required": [
+    "rootCause",
+    "rootCauseCategory",
+    "confidence",
+    "matchedIncidentIds",
+    "relatedChangeId",
+    "changeCorrelation",
+    "evidence"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,194 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Incident RCA Evidence API",
+    "description": "Search historical incident and change evidence to support root cause analysis. Returns grounded matches from Cosmos DB with similarity scores, historical incidents, and related change records.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Local development server"
+    }
+  ],
+  "paths": {
+    "/api/rca/evidence": {
+      "post": {
+        "operationId": "search_incident_rca_evidence",
+        "summary": "Search RCA Evidence",
+        "description": "Search historical incident and change evidence to support root cause analysis. Use this for every RCA request before determining a root cause.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "incident_description": {
+                    "type": "string",
+                    "description": "The user's complete incident description. Can be short and nontechnical (e.g., 'Mobile banking app not working'). Preserve the original user text without modification.",
+                    "example": "Mobile banking app not working"
+                  },
+                  "top_incident_count": {
+                    "type": "integer",
+                    "description": "Maximum number of historical incidents to return. Default is 3. Lower values focus on top matches, higher values provide more context.",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "default": 3,
+                    "example": 3
+                  }
+                },
+                "required": ["incident_description"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "interpretedContext": {
+                      "type": "object",
+                      "properties": {
+                        "businessService": {
+                          "type": "string",
+                          "description": "Inferred business service name"
+                        },
+                        "serviceKey": {
+                          "type": "string",
+                          "description": "Normalized service partition key"
+                        },
+                        "probableApplication": {
+                          "type": "string",
+                          "description": "Likely application name"
+                        },
+                        "symptoms": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Identified symptoms"
+                        },
+                        "keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Extracted keywords"
+                        }
+                      }
+                    },
+                    "historicalMatches": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "incidentId": {
+                            "type": "string",
+                            "description": "Historical incident ID"
+                          },
+                          "similarityScore": {
+                            "type": "integer",
+                            "description": "Similarity score (0-100)"
+                          },
+                          "scoreBreakdown": {
+                            "type": "object",
+                            "properties": {
+                              "service": {
+                                "type": "integer"
+                              },
+                              "application": {
+                                "type": "integer"
+                              },
+                              "symptoms": {
+                                "type": "integer"
+                              },
+                              "tags": {
+                                "type": "integer"
+                              },
+                              "errorCode": {
+                                "type": "integer"
+                              },
+                              "configurationItem": {
+                                "type": "integer"
+                              }
+                            }
+                          },
+                          "incidentTitle": {
+                            "type": "string"
+                          },
+                          "rootCause": {
+                            "type": "string"
+                          },
+                          "rootCauseCategory": {
+                            "type": "string"
+                          },
+                          "linkedChangeId": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "relatedChanges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "changeId": {
+                            "type": "string"
+                          },
+                          "changeTitle": {
+                            "type": "string"
+                          },
+                          "validationResult": {
+                            "type": "string"
+                          },
+                          "rollbackPerformed": {
+                            "type": "boolean"
+                          },
+                          "postImplementationIssues": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "changeSupported": {
+                            "type": "boolean",
+                            "description": "True if change evidence supports the root cause"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid input"
+          },
+          "500": {
+            "description": "Internal server error"
+          },
+          "503": {
+            "description": "Service unavailable - Cosmos DB connection failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "noAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "No authentication required for local development"
+      }
+    }
+  },
+  "security": []
+}

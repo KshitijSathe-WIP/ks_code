@@ -1,0 +1,974 @@
+[
+  {
+    "id": "INC10001",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10001",
+    "incidentTitle": "Online Banking Login Failure Due to LDAP Timeout",
+    "incidentDescription": "Customers were unable to log in to online banking during peak morning traffic. Authentication requests were timing out while validating user credentials.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "AUTH-SVC-PROD-01",
+    "symptoms": [
+      "Login page returned timeout errors",
+      "high failed authentication count",
+      "users could not complete sign-in"
+    ],
+    "errorCodes": [
+      "LDAP-ETIMEOUT"
+    ],
+    "rootCause": "Primary LDAP endpoint was responding slowly due to overloaded directory service nodes",
+    "rootCauseCategory": "Authentication",
+    "resolutionSummary": "Restarted LDAP connector pool and routed traffic to secondary identity provider endpoint",
+    "linkedChangeId": null,
+    "tags": [
+      "login_failure",
+      "ldap_timeout",
+      "authentication_timeout",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking authentication service online banking login failure due to ldap timeout customers were unable to log in to online banking during peak morning traffic. authentication requests were timing out while validating user credentials. login page returned timeout errors high failed authentication count users could not complete sign-in ldap-etimeout login_failure ldap_timeout authentication_timeout online_banking primary ldap endpoint was responding slowly due to overloaded directory service nodes auth-svc-prod-01"
+  },
+  {
+    "id": "INC10002",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10002",
+    "incidentTitle": "Online Banking Login Failure Due to Database Connection Pool Exhaustion",
+    "incidentDescription": "Customers were unable to log in because the authentication service could not retrieve session and profile data from the customer identity database.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "AUTH-DB-PROD-01",
+    "symptoms": [
+      "Login failures",
+      "spinning authentication screen",
+      "database connection wait time exceeded threshold"
+    ],
+    "errorCodes": [
+      "AUTH-504"
+    ],
+    "rootCause": "Authentication database connection pool was exhausted due to sudden login traffic spike",
+    "rootCauseCategory": "Database",
+    "resolutionSummary": "Increased database connection pool limit and restarted authentication service",
+    "linkedChangeId": null,
+    "tags": [
+      "login_failure",
+      "connection_pool",
+      "database",
+      "authentication_service",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking authentication service online banking login failure due to database connection pool exhaustion customers were unable to log in because the authentication service could not retrieve session and profile data from the customer identity database. login failures spinning authentication screen database connection wait time exceeded threshold auth-504 login_failure connection_pool database authentication_service online_banking authentication database connection pool was exhausted due to sudden login traffic spike auth-db-prod-01"
+  },
+  {
+    "id": "INC10003",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10003",
+    "incidentTitle": "Login Failure Due to Expired SSL Certificate",
+    "incidentDescription": "Customers could not access secure login pages after SSL handshake failures between API gateway and authentication service.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "API-GW-PROD-01",
+    "symptoms": [
+      "SSL handshake failed",
+      "login API returned 502",
+      "users saw secure connection error"
+    ],
+    "errorCodes": [
+      "SSL-CERT-EXP"
+    ],
+    "rootCause": "SSL certificate used by authentication service expired and was not rotated before expiry",
+    "rootCauseCategory": "Authentication",
+    "resolutionSummary": "Renewed expired certificate and reloaded API gateway configuration",
+    "linkedChangeId": "CHG50003",
+    "tags": [
+      "login_failure",
+      "ssl_certificate",
+      "certificate_expiry",
+      "authentication",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking authentication service login failure due to expired ssl certificate customers could not access secure login pages after ssl handshake failures between api gateway and authentication service. ssl handshake failed login api returned 502 users saw secure connection error ssl-cert-exp login_failure ssl_certificate certificate_expiry authentication online_banking ssl certificate used by authentication service expired and was not rotated before expiry api-gw-prod-01"
+  },
+  {
+    "id": "INC10004",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10004",
+    "incidentTitle": "MFA Failure Due to Incorrect Identity Provider Configuration",
+    "incidentDescription": "Users were unable to complete MFA challenge after a planned configuration update to the identity provider.",
+    "severity": "P2",
+    "businessService": "Online Banking",
+    "applicationName": "MFA Service",
+    "configurationItem": "IDP-PROD-02",
+    "symptoms": [
+      "MFA push not received",
+      "MFA validation failed",
+      "authentication stuck after password step"
+    ],
+    "errorCodes": [
+      "MFA-CONFIG-401"
+    ],
+    "rootCause": "Incorrect MFA callback URL was configured during identity provider policy update",
+    "rootCauseCategory": "Configuration",
+    "resolutionSummary": "Reverted identity provider MFA policy configuration to previous working version",
+    "linkedChangeId": "CHG50004",
+    "tags": [
+      "login_failure",
+      "mfa_failure",
+      "identity_provider",
+      "configuration",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking mfa service mfa failure due to incorrect identity provider configuration users were unable to complete mfa challenge after a planned configuration update to the identity provider. mfa push not received mfa validation failed authentication stuck after password step mfa-config-401 login_failure mfa_failure identity_provider configuration online_banking incorrect mfa callback url was configured during identity provider policy update idp-prod-02"
+  },
+  {
+    "id": "INC10005",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10005",
+    "incidentTitle": "OAuth Token Validation Failure After Deployment",
+    "incidentDescription": "Mobile and online banking users experienced session failures after deployment of a new token validation library.",
+    "severity": "P1",
+    "businessService": "Mobile Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "AUTH-SVC-PROD-02",
+    "symptoms": [
+      "Users logged out repeatedly",
+      "token validation failed",
+      "API calls returned unauthorized"
+    ],
+    "errorCodes": [
+      "AUTH-TOKEN-401"
+    ],
+    "rootCause": "New token validation library rejected valid tokens due to incorrect issuer validation logic",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Rolled back authentication library deployment and cleared invalid token cache",
+    "linkedChangeId": "CHG50005",
+    "tags": [
+      "login_failure",
+      "oauth_failure",
+      "token_validation",
+      "deployment",
+      "mobile_banking"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking authentication service oauth token validation failure after deployment mobile and online banking users experienced session failures after deployment of a new token validation library. users logged out repeatedly token validation failed api calls returned unauthorized auth-token-401 login_failure oauth_failure token_validation deployment mobile_banking new token validation library rejected valid tokens due to incorrect issuer validation logic auth-svc-prod-02"
+  },
+  {
+    "id": "INC10006",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10006",
+    "incidentTitle": "Firewall Rule Blocking Identity Provider Traffic",
+    "incidentDescription": "Online banking login traffic failed because a firewall rule blocked outbound authentication calls to the identity provider.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "FW-PROD-EDGE-01",
+    "symptoms": [
+      "Login timeout",
+      "identity provider unreachable",
+      "connection refused from authentication subnet"
+    ],
+    "errorCodes": [
+      "FW-BLOCK-IDP"
+    ],
+    "rootCause": "New firewall policy blocked required outbound identity provider traffic",
+    "rootCauseCategory": "Network",
+    "resolutionSummary": "Updated firewall rule to allow authentication subnet traffic to identity provider endpoints",
+    "linkedChangeId": "CHG50006",
+    "tags": [
+      "login_failure",
+      "firewall_block",
+      "identity_provider",
+      "network",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking authentication service firewall rule blocking identity provider traffic online banking login traffic failed because a firewall rule blocked outbound authentication calls to the identity provider. login timeout identity provider unreachable connection refused from authentication subnet fw-block-idp login_failure firewall_block identity_provider network online_banking new firewall policy blocked required outbound identity provider traffic fw-prod-edge-01"
+  },
+  {
+    "id": "INC10007",
+    "documentType": "historicalIncident",
+    "serviceKey": "payments-platform",
+    "incidentId": "INC10007",
+    "incidentTitle": "Payment Processing Failure Due to Database Deadlock",
+    "incidentDescription": "Customers reported failed bill payments and payment status stuck in processing during evening batch settlement.",
+    "severity": "P1",
+    "businessService": "Payments Platform",
+    "applicationName": "Payment Gateway",
+    "configurationItem": "PAY-DB-PROD-01",
+    "symptoms": [
+      "Payment transactions stuck",
+      "duplicate lock wait",
+      "delayed settlement processing"
+    ],
+    "errorCodes": [
+      "DB-LOCK-1205"
+    ],
+    "rootCause": "Concurrent settlement job and real-time payment update process caused database deadlocks",
+    "rootCauseCategory": "Database",
+    "resolutionSummary": "Killed blocking sessions and restarted payment settlement workers",
+    "linkedChangeId": null,
+    "tags": [
+      "payment_failure",
+      "database_deadlock",
+      "payments_platform",
+      "settlement"
+    ],
+    "isResolved": true,
+    "searchText": "payments platform payment gateway payment processing failure due to database deadlock customers reported failed bill payments and payment status stuck in processing during evening batch settlement. payment transactions stuck duplicate lock wait delayed settlement processing db-lock-1205 payment_failure database_deadlock payments_platform settlement concurrent settlement job and real-time payment update process caused database deadlocks pay-db-prod-01"
+  },
+  {
+    "id": "INC10008",
+    "documentType": "historicalIncident",
+    "serviceKey": "payments-platform",
+    "incidentId": "INC10008",
+    "incidentTitle": "Payment API Failure Due to Deployment Defect",
+    "incidentDescription": "Payment initiation API started returning HTTP 500 errors after deployment of a new validation module.",
+    "severity": "P1",
+    "businessService": "Payments Platform",
+    "applicationName": "Payment API",
+    "configurationItem": "PAY-API-PROD-01",
+    "symptoms": [
+      "HTTP 500 on payment submit",
+      "failed transaction validation",
+      "high API error rate"
+    ],
+    "errorCodes": [
+      "API-500-PAY"
+    ],
+    "rootCause": "New validation module failed for certain account number formats",
+    "rootCauseCategory": "Application Defect",
+    "resolutionSummary": "Rolled back faulty validation module deployment",
+    "linkedChangeId": "CHG50008",
+    "tags": [
+      "payment_failure",
+      "api_500",
+      "application_defect",
+      "deployment",
+      "payments_platform"
+    ],
+    "isResolved": true,
+    "searchText": "payments platform payment api payment api failure due to deployment defect payment initiation api started returning http 500 errors after deployment of a new validation module. http 500 on payment submit failed transaction validation high api error rate api-500-pay payment_failure api_500 application_defect deployment payments_platform new validation module failed for certain account number formats pay-api-prod-01"
+  },
+  {
+    "id": "INC10009",
+    "documentType": "historicalIncident",
+    "serviceKey": "credit-card-processing",
+    "incidentId": "INC10009",
+    "incidentTitle": "Credit Card Transaction Delay Due to Queue Backlog",
+    "incidentDescription": "Credit card authorization messages were delayed due to backlog in transaction processing queue.",
+    "severity": "P2",
+    "businessService": "Credit Card Processing",
+    "applicationName": "Card Authorization Service",
+    "configurationItem": "CARD-MQ-PROD-01",
+    "symptoms": [
+      "Authorization delays",
+      "queue depth increasing",
+      "delayed card transaction responses"
+    ],
+    "errorCodes": [
+      "MQ-BACKLOG-90"
+    ],
+    "rootCause": "Consumer thread count was insufficient for transaction spike during promotional campaign",
+    "rootCauseCategory": "Capacity",
+    "resolutionSummary": "Scaled card authorization consumers and drained message queue",
+    "linkedChangeId": null,
+    "tags": [
+      "payment_delay",
+      "queue_backlog",
+      "capacity",
+      "credit_card_processing"
+    ],
+    "isResolved": true,
+    "searchText": "credit card processing card authorization service credit card transaction delay due to queue backlog credit card authorization messages were delayed due to backlog in transaction processing queue. authorization delays queue depth increasing delayed card transaction responses mq-backlog-90 payment_delay queue_backlog capacity credit_card_processing consumer thread count was insufficient for transaction spike during promotional campaign card-mq-prod-01"
+  },
+  {
+    "id": "INC10010",
+    "documentType": "historicalIncident",
+    "serviceKey": "wire-transfer-system",
+    "incidentId": "INC10010",
+    "incidentTitle": "Wire Transfer Failure Due to Third Party Gateway Timeout",
+    "incidentDescription": "Wire transfer submissions failed intermittently because the external payment gateway timed out during request processing.",
+    "severity": "P1",
+    "businessService": "Wire Transfer System",
+    "applicationName": "Wire Transfer Gateway",
+    "configurationItem": "WIRE-EXT-GW-01",
+    "symptoms": [
+      "Wire submit failed",
+      "timeout from external gateway",
+      "retry attempts exhausted"
+    ],
+    "errorCodes": [
+      "EXT-GW-504"
+    ],
+    "rootCause": "External wire gateway provider experienced degraded response times",
+    "rootCauseCategory": "Third Party",
+    "resolutionSummary": "Enabled retry policy and coordinated recovery with third-party gateway provider",
+    "linkedChangeId": null,
+    "tags": [
+      "wire_transfer",
+      "third_party_timeout",
+      "payment_failure",
+      "gateway_timeout"
+    ],
+    "isResolved": true,
+    "searchText": "wire transfer system wire transfer gateway wire transfer failure due to third party gateway timeout wire transfer submissions failed intermittently because the external payment gateway timed out during request processing. wire submit failed timeout from external gateway retry attempts exhausted ext-gw-504 wire_transfer third_party_timeout payment_failure gateway_timeout external wire gateway provider experienced degraded response times wire-ext-gw-01"
+  },
+  {
+    "id": "INC10011",
+    "documentType": "historicalIncident",
+    "serviceKey": "payments-platform",
+    "incidentId": "INC10011",
+    "incidentTitle": "Payment API Failure Due to Certificate Deployment Issue",
+    "incidentDescription": "Payment API calls failed after a certificate update was deployed without updating the trust store on backend services.",
+    "severity": "P1",
+    "businessService": "Payments Platform",
+    "applicationName": "Payment Gateway",
+    "configurationItem": "PAY-GW-PROD-02",
+    "symptoms": [
+      "Payment submit failed",
+      "TLS validation error",
+      "backend rejected gateway certificate"
+    ],
+    "errorCodes": [
+      "TLS-VALIDATION-403"
+    ],
+    "rootCause": "Certificate chain was updated on API gateway but backend trust store did not include new intermediate CA",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Updated backend trust store and restarted payment services",
+    "linkedChangeId": "CHG50011",
+    "tags": [
+      "payment_failure",
+      "certificate_issue",
+      "tls_validation",
+      "deployment",
+      "payments_platform"
+    ],
+    "isResolved": true,
+    "searchText": "payments platform payment gateway payment api failure due to certificate deployment issue payment api calls failed after a certificate update was deployed without updating the trust store on backend services. payment submit failed tls validation error backend rejected gateway certificate tls-validation-403 payment_failure certificate_issue tls_validation deployment payments_platform certificate chain was updated on api gateway but backend trust store did not include new intermediate ca pay-gw-prod-02"
+  },
+  {
+    "id": "INC10012",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10012",
+    "incidentTitle": "Mobile Banking Slowness Due to Memory Leak",
+    "incidentDescription": "Mobile app users experienced slow response times and intermittent timeout errors after prolonged service runtime.",
+    "severity": "P2",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "MOB-API-PROD-01",
+    "symptoms": [
+      "Mobile API latency above 20 seconds",
+      "pod memory increasing",
+      "intermittent timeout"
+    ],
+    "errorCodes": [
+      "API-408"
+    ],
+    "rootCause": "Memory leak in customer session cache caused pod memory pressure and garbage collection delays",
+    "rootCauseCategory": "Application Defect",
+    "resolutionSummary": "Restarted affected pods and rolled back memory-intensive caching change",
+    "linkedChangeId": "CHG50012",
+    "tags": [
+      "mobile_banking",
+      "api_timeout",
+      "memory_leak",
+      "slowness",
+      "application_defect"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking mobile banking api mobile banking slowness due to memory leak mobile app users experienced slow response times and intermittent timeout errors after prolonged service runtime. mobile api latency above 20 seconds pod memory increasing intermittent timeout api-408 mobile_banking api_timeout memory_leak slowness application_defect memory leak in customer session cache caused pod memory pressure and garbage collection delays mob-api-prod-01"
+  },
+  {
+    "id": "INC10013",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10013",
+    "incidentTitle": "Mobile Banking API Timeout Due to Long Running Query",
+    "incidentDescription": "Mobile dashboard loading was slow because customer summary API waited on a long-running database query.",
+    "severity": "P2",
+    "businessService": "Mobile Banking",
+    "applicationName": "Customer API",
+    "configurationItem": "CUST-DB-PROD-01",
+    "symptoms": [
+      "Dashboard loading slow",
+      "API timeout",
+      "database query elapsed time high"
+    ],
+    "errorCodes": [
+      "DB-SLOW-QUERY"
+    ],
+    "rootCause": "Missing index on customer transaction summary table caused full table scans",
+    "rootCauseCategory": "Database",
+    "resolutionSummary": "Added missing index and cleared long-running sessions",
+    "linkedChangeId": null,
+    "tags": [
+      "mobile_banking",
+      "api_timeout",
+      "long_running_query",
+      "database",
+      "slowness"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking customer api mobile banking api timeout due to long running query mobile dashboard loading was slow because customer summary api waited on a long-running database query. dashboard loading slow api timeout database query elapsed time high db-slow-query mobile_banking api_timeout long_running_query database slowness missing index on customer transaction summary table caused full table scans cust-db-prod-01"
+  },
+  {
+    "id": "INC10014",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10014",
+    "incidentTitle": "Mobile Banking Slowness Due to Load Balancer Misconfiguration",
+    "incidentDescription": "Mobile users saw intermittent slowness because traffic was routed unevenly to overloaded API nodes.",
+    "severity": "P2",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "LB-MOB-PROD-01",
+    "symptoms": [
+      "Intermittent mobile latency",
+      "one API node overloaded",
+      "uneven traffic distribution"
+    ],
+    "errorCodes": [
+      "LB-MISCONFIG"
+    ],
+    "rootCause": "Load balancer health check misconfiguration kept routing traffic to degraded node",
+    "rootCauseCategory": "Network",
+    "resolutionSummary": "Corrected load balancer algorithm and health probe settings",
+    "linkedChangeId": "CHG50014",
+    "tags": [
+      "mobile_banking",
+      "load_balancer",
+      "network_latency",
+      "slowness"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking mobile banking api mobile banking slowness due to load balancer misconfiguration mobile users saw intermittent slowness because traffic was routed unevenly to overloaded api nodes. intermittent mobile latency one api node overloaded uneven traffic distribution lb-misconfig mobile_banking load_balancer network_latency slowness load balancer health check misconfiguration kept routing traffic to degraded node lb-mob-prod-01"
+  },
+  {
+    "id": "INC10015",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10015",
+    "incidentTitle": "DNS Resolution Issue Impacting Mobile Banking",
+    "incidentDescription": "Mobile banking login and account summary APIs failed intermittently due to DNS resolution failures for internal service endpoints.",
+    "severity": "P1",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "DNS-PROD-01",
+    "symptoms": [
+      "Intermittent API failures",
+      "service endpoint not resolved",
+      "mobile login retries"
+    ],
+    "errorCodes": [
+      "DNS-NXDOMAIN"
+    ],
+    "rootCause": "Internal DNS record for mobile API dependency was accidentally removed",
+    "rootCauseCategory": "Network",
+    "resolutionSummary": "Flushed DNS cache and restored missing internal DNS record",
+    "linkedChangeId": "CHG50015",
+    "tags": [
+      "mobile_banking",
+      "dns_failure",
+      "network",
+      "api_failure"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking mobile banking api dns resolution issue impacting mobile banking mobile banking login and account summary apis failed intermittently due to dns resolution failures for internal service endpoints. intermittent api failures service endpoint not resolved mobile login retries dns-nxdomain mobile_banking dns_failure network api_failure internal dns record for mobile api dependency was accidentally removed dns-prod-01"
+  },
+  {
+    "id": "INC10016",
+    "documentType": "historicalIncident",
+    "serviceKey": "regulatory-reporting-platform",
+    "incidentId": "INC10016",
+    "incidentTitle": "Regulatory Reporting ETL Failure Due to Schema Mismatch",
+    "incidentDescription": "Daily regulatory reporting batch failed after upstream schema changed without corresponding ETL mapping update.",
+    "severity": "P2",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Regulatory Reporting ETL",
+    "configurationItem": "REG-ETL-PROD-01",
+    "symptoms": [
+      "ETL job failed",
+      "column not found",
+      "report generation delayed"
+    ],
+    "errorCodes": [
+      "ETL-SCHEMA-404"
+    ],
+    "rootCause": "Upstream data schema changed and removed expected column used by reporting ETL",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Updated ETL mapping and reprocessed failed batch",
+    "linkedChangeId": "CHG50016",
+    "tags": [
+      "regulatory_reporting",
+      "etl_failure",
+      "schema_mismatch",
+      "deployment",
+      "batch_delay"
+    ],
+    "isResolved": true,
+    "searchText": "regulatory reporting platform regulatory reporting etl regulatory reporting etl failure due to schema mismatch daily regulatory reporting batch failed after upstream schema changed without corresponding etl mapping update. etl job failed column not found report generation delayed etl-schema-404 regulatory_reporting etl_failure schema_mismatch deployment batch_delay upstream data schema changed and removed expected column used by reporting etl reg-etl-prod-01"
+  },
+  {
+    "id": "INC10017",
+    "documentType": "historicalIncident",
+    "serviceKey": "regulatory-reporting-platform",
+    "incidentId": "INC10017",
+    "incidentTitle": "Regulatory Reporting Delay Due to Database Lock",
+    "incidentDescription": "Regulatory batch processing was delayed because reporting tables were locked by an overlapping reconciliation job.",
+    "severity": "P2",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Regulatory Reporting ETL",
+    "configurationItem": "REG-DB-PROD-01",
+    "symptoms": [
+      "ETL waiting on lock",
+      "reporting SLA at risk",
+      "blocking session detected"
+    ],
+    "errorCodes": [
+      "DB-LOCK-REG"
+    ],
+    "rootCause": "Reconciliation job overlapped with reporting ETL and held exclusive lock on staging table",
+    "rootCauseCategory": "Database",
+    "resolutionSummary": "Terminated blocking reconciliation job and resumed reporting ETL",
+    "linkedChangeId": null,
+    "tags": [
+      "regulatory_reporting",
+      "database_lock",
+      "batch_delay",
+      "etl_failure"
+    ],
+    "isResolved": true,
+    "searchText": "regulatory reporting platform regulatory reporting etl regulatory reporting delay due to database lock regulatory batch processing was delayed because reporting tables were locked by an overlapping reconciliation job. etl waiting on lock reporting sla at risk blocking session detected db-lock-reg regulatory_reporting database_lock batch_delay etl_failure reconciliation job overlapped with reporting etl and held exclusive lock on staging table reg-db-prod-01"
+  },
+  {
+    "id": "INC10018",
+    "documentType": "historicalIncident",
+    "serviceKey": "regulatory-reporting-platform",
+    "incidentId": "INC10018",
+    "incidentTitle": "Regulatory ETL Failure Due to Incorrect Job Parameter",
+    "incidentDescription": "Regulatory report generation failed because a job parameter was incorrectly updated during deployment.",
+    "severity": "P3",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Regulatory Reporting ETL",
+    "configurationItem": "REG-ETL-PROD-02",
+    "symptoms": [
+      "ETL job aborted",
+      "invalid business date parameter",
+      "missing output file"
+    ],
+    "errorCodes": [
+      "ETL-PARAM-400"
+    ],
+    "rootCause": "Incorrect job parameter was promoted during release configuration update",
+    "rootCauseCategory": "Configuration",
+    "resolutionSummary": "Corrected business date parameter and restarted ETL job",
+    "linkedChangeId": "CHG50018",
+    "tags": [
+      "regulatory_reporting",
+      "configuration_error",
+      "batch_failure",
+      "etl"
+    ],
+    "isResolved": true,
+    "searchText": "regulatory reporting platform regulatory reporting etl regulatory etl failure due to incorrect job parameter regulatory report generation failed because a job parameter was incorrectly updated during deployment. etl job aborted invalid business date parameter missing output file etl-param-400 regulatory_reporting configuration_error batch_failure etl incorrect job parameter was promoted during release configuration update reg-etl-prod-02"
+  },
+  {
+    "id": "INC10019",
+    "documentType": "historicalIncident",
+    "serviceKey": "data-warehouse-platform",
+    "incidentId": "INC10019",
+    "incidentTitle": "Storage Full Issue Impacting Batch Processing",
+    "incidentDescription": "Data warehouse and regulatory batch jobs failed because the staging storage volume reached full capacity.",
+    "severity": "P2",
+    "businessService": "Data Warehouse Platform",
+    "applicationName": "Batch Processing Platform",
+    "configurationItem": "DWH-STG-PROD-01",
+    "symptoms": [
+      "Batch job failed",
+      "unable to write staging files",
+      "storage utilization 100 percent"
+    ],
+    "errorCodes": [
+      "STORAGE-FULL"
+    ],
+    "rootCause": "Temporary batch files accumulated due to failed cleanup process",
+    "rootCauseCategory": "Infrastructure",
+    "resolutionSummary": "Cleared obsolete temporary files and expanded storage volume",
+    "linkedChangeId": null,
+    "tags": [
+      "storage_full",
+      "batch_failure",
+      "infrastructure",
+      "regulatory_reporting"
+    ],
+    "isResolved": true,
+    "searchText": "data warehouse platform batch processing platform storage full issue impacting batch processing data warehouse and regulatory batch jobs failed because the staging storage volume reached full capacity. batch job failed unable to write staging files storage utilization 100 percent storage-full storage_full batch_failure infrastructure regulatory_reporting temporary batch files accumulated due to failed cleanup process dwh-stg-prod-01"
+  },
+  {
+    "id": "INC10020",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10020",
+    "incidentTitle": "Kubernetes Pod Restart Loop Due to Missing Environment Variable",
+    "incidentDescription": "Authentication microservice pods entered crash loop after deployment because a required environment variable was missing.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "K8S-AUTH-PROD",
+    "symptoms": [
+      "Pods restarting",
+      "login API unavailable",
+      "crash loop backoff observed"
+    ],
+    "errorCodes": [
+      "K8S-ENV-MISSING"
+    ],
+    "rootCause": "Deployment manifest missed required token issuer environment variable",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Redeployed service with correct environment variable configuration",
+    "linkedChangeId": "CHG50020",
+    "tags": [
+      "login_failure",
+      "kubernetes",
+      "missing_env_variable",
+      "deployment",
+      "authentication"
+    ],
+    "isResolved": true,
+    "searchText": "online banking authentication service kubernetes pod restart loop due to missing environment variable authentication microservice pods entered crash loop after deployment because a required environment variable was missing. pods restarting login api unavailable crash loop backoff observed k8s-env-missing login_failure kubernetes missing_env_variable deployment authentication deployment manifest missed required token issuer environment variable k8s-auth-prod"
+  },
+  {
+    "id": "INC10021",
+    "documentType": "historicalIncident",
+    "serviceKey": "customer-profile-service",
+    "incidentId": "INC10021",
+    "incidentTitle": "Release Rollback Due to API Contract Mismatch",
+    "incidentDescription": "Customer profile API failed after release because downstream consumers expected old response contract.",
+    "severity": "P1",
+    "businessService": "Customer Profile Service",
+    "applicationName": "Customer API",
+    "configurationItem": "CUST-API-PROD-01",
+    "symptoms": [
+      "Customer profile load failed",
+      "downstream API parsing errors",
+      "HTTP 500 responses"
+    ],
+    "errorCodes": [
+      "API-CONTRACT-500"
+    ],
+    "rootCause": "New API version introduced breaking response contract without downstream compatibility",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Rolled back API release and restored previous response schema",
+    "linkedChangeId": "CHG50021",
+    "tags": [
+      "api_contract_mismatch",
+      "deployment",
+      "customer_api",
+      "profile_failure"
+    ],
+    "isResolved": true,
+    "searchText": "customer profile service customer api release rollback due to api contract mismatch customer profile api failed after release because downstream consumers expected old response contract. customer profile load failed downstream api parsing errors http 500 responses api-contract-500 api_contract_mismatch deployment customer_api profile_failure new api version introduced breaking response contract without downstream compatibility cust-api-prod-01"
+  },
+  {
+    "id": "INC10022",
+    "documentType": "historicalIncident",
+    "serviceKey": "mortgage-platform",
+    "incidentId": "INC10022",
+    "incidentTitle": "Loan Servicing API Failure Due to Deployment Package Corruption",
+    "incidentDescription": "Loan servicing API failed after deployment because the release artifact was corrupted during package promotion.",
+    "severity": "P2",
+    "businessService": "Mortgage Platform",
+    "applicationName": "Loan Servicing API",
+    "configurationItem": "LOAN-API-PROD-01",
+    "symptoms": [
+      "Loan details unavailable",
+      "API startup failure",
+      "checksum mismatch"
+    ],
+    "errorCodes": [
+      "DEPLOY-PKG-CORRUPT"
+    ],
+    "rootCause": "Deployment artifact was corrupted during promotion from staging to production",
+    "rootCauseCategory": "Deployment",
+    "resolutionSummary": "Rebuilt release artifact and redeployed validated package",
+    "linkedChangeId": null,
+    "tags": [
+      "deployment_failure",
+      "package_corruption",
+      "loan_servicing_api",
+      "mortgage_platform"
+    ],
+    "isResolved": true,
+    "searchText": "mortgage platform loan servicing api loan servicing api failure due to deployment package corruption loan servicing api failed after deployment because the release artifact was corrupted during package promotion. loan details unavailable api startup failure checksum mismatch deploy-pkg-corrupt deployment_failure package_corruption loan_servicing_api mortgage_platform deployment artifact was corrupted during promotion from staging to production loan-api-prod-01"
+  },
+  {
+    "id": "INC10023",
+    "documentType": "historicalIncident",
+    "serviceKey": "fraud-detection-platform",
+    "incidentId": "INC10023",
+    "incidentTitle": "Fraud Detection Service Delay Due to CPU Saturation",
+    "incidentDescription": "Fraud scoring responses were delayed because rules engine CPU reached sustained high utilization.",
+    "severity": "P2",
+    "businessService": "Fraud Detection Platform",
+    "applicationName": "Fraud Rules Engine",
+    "configurationItem": "FRAUD-CPU-PROD-01",
+    "symptoms": [
+      "Fraud scoring latency high",
+      "CPU above 95 percent",
+      "transaction approvals delayed"
+    ],
+    "errorCodes": [
+      "CPU-95"
+    ],
+    "rootCause": "High transaction volume and inefficient fraud rule evaluation caused CPU saturation",
+    "rootCauseCategory": "Capacity",
+    "resolutionSummary": "Scaled fraud rules engine nodes and disabled non-critical rules temporarily",
+    "linkedChangeId": null,
+    "tags": [
+      "fraud_detection",
+      "cpu_saturation",
+      "capacity",
+      "transaction_delay"
+    ],
+    "isResolved": true,
+    "searchText": "fraud detection platform fraud rules engine fraud detection service delay due to cpu saturation fraud scoring responses were delayed because rules engine cpu reached sustained high utilization. fraud scoring latency high cpu above 95 percent transaction approvals delayed cpu-95 fraud_detection cpu_saturation capacity transaction_delay high transaction volume and inefficient fraud rule evaluation caused cpu saturation fraud-cpu-prod-01"
+  },
+  {
+    "id": "INC10024",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10024",
+    "incidentTitle": "Online Banking Timeout Due to Thread Pool Exhaustion",
+    "incidentDescription": "Online banking users experienced intermittent timeout due to exhausted application thread pool.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "Online Banking Web App",
+    "configurationItem": "WEB-APP-PROD-01",
+    "symptoms": [
+      "Page timeout",
+      "requests queued",
+      "thread pool fully utilized"
+    ],
+    "errorCodes": [
+      "THREAD-POOL-EXHAUSTED"
+    ],
+    "rootCause": "Thread pool was exhausted due to increased synchronous calls to profile service",
+    "rootCauseCategory": "Capacity",
+    "resolutionSummary": "Increased thread pool size and restarted web application nodes",
+    "linkedChangeId": null,
+    "tags": [
+      "online_banking",
+      "thread_pool_exhaustion",
+      "capacity",
+      "timeout"
+    ],
+    "isResolved": true,
+    "searchText": "online banking online banking web app online banking timeout due to thread pool exhaustion online banking users experienced intermittent timeout due to exhausted application thread pool. page timeout requests queued thread pool fully utilized thread-pool-exhausted online_banking thread_pool_exhaustion capacity timeout thread pool was exhausted due to increased synchronous calls to profile service web-app-prod-01"
+  },
+  {
+    "id": "INC10025",
+    "documentType": "historicalIncident",
+    "serviceKey": "customer-profile-service",
+    "incidentId": "INC10025",
+    "incidentTitle": "Customer API Degradation Due to High CPU",
+    "incidentDescription": "Customer profile lookup degraded due to high CPU on application nodes after traffic spike.",
+    "severity": "P2",
+    "businessService": "Customer Profile Service",
+    "applicationName": "Customer API",
+    "configurationItem": "CUST-API-PROD-02",
+    "symptoms": [
+      "Profile lookup slow",
+      "API response time high",
+      "CPU above threshold"
+    ],
+    "errorCodes": [
+      "CPU-HIGH-API"
+    ],
+    "rootCause": "Traffic spike exceeded provisioned API compute capacity",
+    "rootCauseCategory": "Capacity",
+    "resolutionSummary": "Scaled additional API instances and restarted degraded nodes",
+    "linkedChangeId": null,
+    "tags": [
+      "customer_api",
+      "cpu_high",
+      "capacity",
+      "profile_lookup"
+    ],
+    "isResolved": true,
+    "searchText": "customer profile service customer api customer api degradation due to high cpu customer profile lookup degraded due to high cpu on application nodes after traffic spike. profile lookup slow api response time high cpu above threshold cpu-high-api customer_api cpu_high capacity profile_lookup traffic spike exceeded provisioned api compute capacity cust-api-prod-02"
+  },
+  {
+    "id": "INC10026",
+    "documentType": "historicalIncident",
+    "serviceKey": "fraud-detection-platform",
+    "incidentId": "INC10026",
+    "incidentTitle": "Fraud Rules Engine Failure Due to Configuration Error",
+    "incidentDescription": "Fraud rules engine rejected valid transactions after incorrect rule threshold configuration was deployed.",
+    "severity": "P1",
+    "businessService": "Fraud Detection Platform",
+    "applicationName": "Fraud Rules Engine",
+    "configurationItem": "FRAUD-RULES-PROD-01",
+    "symptoms": [
+      "Valid transactions declined",
+      "fraud false positive rate increased",
+      "rule hit ratio abnormal"
+    ],
+    "errorCodes": [
+      "FRAUD-RULE-THRESHOLD"
+    ],
+    "rootCause": "Fraud rule threshold was configured too aggressively during rule update",
+    "rootCauseCategory": "Configuration",
+    "resolutionSummary": "Reverted incorrect fraud rule threshold and reprocessed impacted transactions",
+    "linkedChangeId": "CHG50026",
+    "tags": [
+      "fraud_detection",
+      "configuration_error",
+      "false_positive",
+      "transaction_decline"
+    ],
+    "isResolved": true,
+    "searchText": "fraud detection platform fraud rules engine fraud rules engine failure due to configuration error fraud rules engine rejected valid transactions after incorrect rule threshold configuration was deployed. valid transactions declined fraud false positive rate increased rule hit ratio abnormal fraud-rule-threshold fraud_detection configuration_error false_positive transaction_decline fraud rule threshold was configured too aggressively during rule update fraud-rules-prod-01"
+  },
+  {
+    "id": "INC10027",
+    "documentType": "historicalIncident",
+    "serviceKey": "regulatory-reporting-platform",
+    "incidentId": "INC10027",
+    "incidentTitle": "Reporting Dashboard Unavailable Due to Database Index Corruption",
+    "incidentDescription": "Internal regulatory dashboard failed to load after database index corruption on reporting summary table.",
+    "severity": "P2",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Reporting Dashboard",
+    "configurationItem": "REG-DB-PROD-02",
+    "symptoms": [
+      "Dashboard unavailable",
+      "query failed",
+      "index corruption detected"
+    ],
+    "errorCodes": [
+      "DB-INDEX-CORRUPT"
+    ],
+    "rootCause": "Reporting summary table index was corrupted after failed maintenance job",
+    "rootCauseCategory": "Database",
+    "resolutionSummary": "Rebuilt corrupted index and validated dashboard queries",
+    "linkedChangeId": null,
+    "tags": [
+      "reporting_dashboard",
+      "database",
+      "index_corruption",
+      "regulatory_reporting"
+    ],
+    "isResolved": true,
+    "searchText": "regulatory reporting platform reporting dashboard reporting dashboard unavailable due to database index corruption internal regulatory dashboard failed to load after database index corruption on reporting summary table. dashboard unavailable query failed index corruption detected db-index-corrupt reporting_dashboard database index_corruption regulatory_reporting reporting summary table index was corrupted after failed maintenance job reg-db-prod-02"
+  },
+  {
+    "id": "INC10028",
+    "documentType": "historicalIncident",
+    "serviceKey": "mobile-banking",
+    "incidentId": "INC10028",
+    "incidentTitle": "Mobile App Session Expiry Issue Due to Token Cache Defect",
+    "incidentDescription": "Mobile users were logged out unexpectedly because token cache expiry logic was defective.",
+    "severity": "P2",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "MOB-AUTH-PROD-01",
+    "symptoms": [
+      "Unexpected logout",
+      "session expired early",
+      "token refresh failed"
+    ],
+    "errorCodes": [
+      "TOKEN-CACHE-EXP"
+    ],
+    "rootCause": "Token cache defect expired valid sessions earlier than configured timeout",
+    "rootCauseCategory": "Application Defect",
+    "resolutionSummary": "Disabled faulty token cache optimization and restarted mobile authentication service",
+    "linkedChangeId": null,
+    "tags": [
+      "mobile_banking",
+      "session_expiry",
+      "token_cache",
+      "application_defect"
+    ],
+    "isResolved": true,
+    "searchText": "mobile banking mobile banking api mobile app session expiry issue due to token cache defect mobile users were logged out unexpectedly because token cache expiry logic was defective. unexpected logout session expired early token refresh failed token-cache-exp mobile_banking session_expiry token_cache application_defect token cache defect expired valid sessions earlier than configured timeout mob-auth-prod-01"
+  },
+  {
+    "id": "INC10029",
+    "documentType": "historicalIncident",
+    "serviceKey": "treasury-platform",
+    "incidentId": "INC10029",
+    "incidentTitle": "Treasury Platform File Transfer Failure Due to SFTP Key Rotation",
+    "incidentDescription": "Treasury settlement files were not transferred because the SFTP key rotation was incomplete on the receiving endpoint.",
+    "severity": "P1",
+    "businessService": "Treasury Platform",
+    "applicationName": "Treasury File Transfer",
+    "configurationItem": "TREAS-SFTP-PROD-01",
+    "symptoms": [
+      "SFTP authentication failed",
+      "settlement files not delivered",
+      "batch missed transfer window"
+    ],
+    "errorCodes": [
+      "SFTP-AUTH-KEY"
+    ],
+    "rootCause": "SFTP key was rotated on source but not updated on receiving endpoint",
+    "rootCauseCategory": "Authentication",
+    "resolutionSummary": "Updated receiving endpoint with new SFTP public key and resent settlement files",
+    "linkedChangeId": null,
+    "tags": [
+      "treasury",
+      "sftp_key_rotation",
+      "authentication",
+      "file_transfer_failure"
+    ],
+    "isResolved": true,
+    "searchText": "treasury platform treasury file transfer treasury platform file transfer failure due to sftp key rotation treasury settlement files were not transferred because the sftp key rotation was incomplete on the receiving endpoint. sftp authentication failed settlement files not delivered batch missed transfer window sftp-auth-key treasury sftp_key_rotation authentication file_transfer_failure sftp key was rotated on source but not updated on receiving endpoint treas-sftp-prod-01"
+  },
+  {
+    "id": "INC10030",
+    "documentType": "historicalIncident",
+    "serviceKey": "online-banking",
+    "incidentId": "INC10030",
+    "incidentTitle": "DDoS Protection Rule Throttling Valid Banking Traffic",
+    "incidentDescription": "Valid customer traffic was throttled after DDoS protection rule incorrectly classified login traffic as suspicious.",
+    "severity": "P1",
+    "businessService": "Online Banking",
+    "applicationName": "API Gateway",
+    "configurationItem": "DDOS-PROD-EDGE-01",
+    "symptoms": [
+      "High request rejection",
+      "valid login attempts blocked",
+      "gateway returned 429"
+    ],
+    "errorCodes": [
+      "SEC-DDOS-429"
+    ],
+    "rootCause": "DDoS protection rule threshold was too aggressive and blocked legitimate peak traffic",
+    "rootCauseCategory": "Security",
+    "resolutionSummary": "Tuned DDoS protection rule and allowlisted trusted banking traffic pattern",
+    "linkedChangeId": "CHG50030",
+    "tags": [
+      "security",
+      "ddos_rule",
+      "false_positive",
+      "login_failure",
+      "online_banking"
+    ],
+    "isResolved": true,
+    "searchText": "online banking api gateway ddos protection rule throttling valid banking traffic valid customer traffic was throttled after ddos protection rule incorrectly classified login traffic as suspicious. high request rejection valid login attempts blocked gateway returned 429 sec-ddos-429 security ddos_rule false_positive login_failure online_banking ddos protection rule threshold was too aggressive and blocked legitimate peak traffic ddos-prod-edge-01"
+  }
+]

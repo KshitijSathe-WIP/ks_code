@@ -1,0 +1,458 @@
+[
+  {
+    "id": "CHG50003",
+    "documentType": "changeRecord",
+    "serviceKey": "online-banking",
+    "changeId": "CHG50003",
+    "changeTitle": "Authentication SSL Certificate Renewal",
+    "changeDescription": "Renew authentication service certificates for internet banking",
+    "changeType": "Normal",
+    "changeCategory": "Certificate",
+    "changeStatus": "Completed",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "AUTH-SVC-PROD-01",
+    "implementationSummary": "Installed new SSL certificate chain",
+    "rollbackPerformed": false,
+    "validationResult": "Successful",
+    "postImplementationIssues": [
+      "Intermediate certificate missing initially"
+    ],
+    "relatedIncidentIds": [
+      "INC10003"
+    ],
+    "changeCorrelationNotes": "Directly related to SSL login failures",
+    "tags": [
+      "certificate",
+      "ssl",
+      "authentication",
+      "login_failure"
+    ],
+    "searchText": "online banking authentication service authentication ssl certificate renewal renew authentication service certificates for internet banking installed new ssl certificate chain certificate ssl authentication login_failure auth-svc-prod-01"
+  },
+  {
+    "id": "CHG50004",
+    "documentType": "changeRecord",
+    "serviceKey": "online-banking",
+    "changeId": "CHG50004",
+    "changeTitle": "MFA Callback URL Update",
+    "changeDescription": "Update MFA integration endpoints after IdP migration",
+    "changeType": "Normal",
+    "changeCategory": "Configuration",
+    "changeStatus": "Completed",
+    "businessService": "Online Banking",
+    "applicationName": "MFA Service",
+    "configurationItem": "IDP-PROD-02",
+    "implementationSummary": "Changed callback URLs and trust mappings",
+    "rollbackPerformed": false,
+    "validationResult": "Partially Successful",
+    "postImplementationIssues": [
+      "MFA validation failed for subset of users"
+    ],
+    "relatedIncidentIds": [
+      "INC10004"
+    ],
+    "changeCorrelationNotes": "Explains MFA authentication failures",
+    "tags": [
+      "mfa",
+      "callback_url",
+      "identity_provider",
+      "authentication"
+    ],
+    "searchText": "online banking mfa service mfa callback url update update mfa integration endpoints after idp migration changed callback urls and trust mappings mfa callback_url identity_provider authentication idp-prod-02"
+  },
+  {
+    "id": "CHG50005",
+    "documentType": "changeRecord",
+    "serviceKey": "mobile-banking",
+    "changeId": "CHG50005",
+    "changeTitle": "OAuth Validation Library Upgrade",
+    "changeDescription": "Deploy new OAuth token validation framework",
+    "changeType": "Normal",
+    "changeCategory": "Deployment",
+    "changeStatus": "Rolled Back",
+    "businessService": "Mobile Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "AUTH-SVC-PROD-02",
+    "implementationSummary": "Upgraded OAuth validation engine",
+    "rollbackPerformed": true,
+    "validationResult": "Failed",
+    "postImplementationIssues": [
+      "Token validation failures observed"
+    ],
+    "relatedIncidentIds": [
+      "INC10005"
+    ],
+    "changeCorrelationNotes": "Strong correlation with token validation incident",
+    "tags": [
+      "oauth",
+      "token_validation",
+      "deployment",
+      "login_failure"
+    ],
+    "searchText": "mobile banking authentication service oauth validation library upgrade deploy new oauth token validation framework upgraded oauth validation engine oauth token_validation deployment login_failure auth-svc-prod-02"
+  },
+  {
+    "id": "CHG50006",
+    "documentType": "changeRecord",
+    "serviceKey": "online-banking",
+    "changeId": "CHG50006",
+    "changeTitle": "Firewall Security Policy Refresh",
+    "changeDescription": "Network security policy refresh for identity provider routes",
+    "changeType": "Emergency",
+    "changeCategory": "Network",
+    "changeStatus": "Completed",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "FW-PROD-EDGE-01",
+    "implementationSummary": "Updated firewall ACL rules",
+    "rollbackPerformed": false,
+    "validationResult": "Successful with Warning",
+    "postImplementationIssues": [
+      "Traffic blocked for IdP subnet"
+    ],
+    "relatedIncidentIds": [
+      "INC10006"
+    ],
+    "changeCorrelationNotes": "Generated authentication traffic interruption",
+    "tags": [
+      "firewall",
+      "idp",
+      "network",
+      "login_failure"
+    ],
+    "searchText": "online banking authentication service firewall security policy refresh network security policy refresh for identity provider routes updated firewall acl rules firewall idp network login_failure fw-prod-edge-01"
+  },
+  {
+    "id": "CHG50008",
+    "documentType": "changeRecord",
+    "serviceKey": "payments-platform",
+    "changeId": "CHG50008",
+    "changeTitle": "Payment API Validation Module Release",
+    "changeDescription": "Deploy enhanced payment validation logic",
+    "changeType": "Normal",
+    "changeCategory": "Deployment",
+    "changeStatus": "Rolled Back",
+    "businessService": "Payments Platform",
+    "applicationName": "Payment API",
+    "configurationItem": "PAY-API-PROD-01",
+    "implementationSummary": "Released new account validation component",
+    "rollbackPerformed": true,
+    "validationResult": "Failed",
+    "postImplementationIssues": [
+      "HTTP 500 errors detected"
+    ],
+    "relatedIncidentIds": [
+      "INC10008"
+    ],
+    "changeCorrelationNotes": "Directly caused payment API failures",
+    "tags": [
+      "payment_api",
+      "validation",
+      "deployment",
+      "api_500"
+    ],
+    "searchText": "payments platform payment api payment api validation module release deploy enhanced payment validation logic released new account validation component payment_api validation deployment api_500 pay-api-prod-01"
+  },
+  {
+    "id": "CHG50011",
+    "documentType": "changeRecord",
+    "serviceKey": "payments-platform",
+    "changeId": "CHG50011",
+    "changeTitle": "TLS Certificate Chain Update",
+    "changeDescription": "Replace expiring payment platform certificates",
+    "changeType": "Normal",
+    "changeCategory": "Certificate",
+    "changeStatus": "Completed",
+    "businessService": "Payments Platform",
+    "applicationName": "Payment Gateway",
+    "configurationItem": "PAY-GW-PROD-02",
+    "implementationSummary": "Installed renewed TLS certificates",
+    "rollbackPerformed": false,
+    "validationResult": "Partially Successful",
+    "postImplementationIssues": [
+      "Trust chain mismatch found"
+    ],
+    "relatedIncidentIds": [
+      "INC10011"
+    ],
+    "changeCorrelationNotes": "Certificate chain issue caused payment failures",
+    "tags": [
+      "tls",
+      "certificate",
+      "payment_gateway"
+    ],
+    "searchText": "payments platform payment gateway tls certificate chain update replace expiring payment platform certificates installed renewed tls certificates tls certificate payment_gateway pay-gw-prod-02"
+  },
+  {
+    "id": "CHG50012",
+    "documentType": "changeRecord",
+    "serviceKey": "mobile-banking",
+    "changeId": "CHG50012",
+    "changeTitle": "Session Cache Optimization Release",
+    "changeDescription": "Deploy enhanced caching framework for mobile APIs",
+    "changeType": "Normal",
+    "changeCategory": "Deployment",
+    "changeStatus": "Completed",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "MOB-API-PROD-01",
+    "implementationSummary": "Enabled new cache engine",
+    "rollbackPerformed": false,
+    "validationResult": "Successful with Warning",
+    "postImplementationIssues": [
+      "Memory growth observed after deployment"
+    ],
+    "relatedIncidentIds": [
+      "INC10012"
+    ],
+    "changeCorrelationNotes": "Likely source of memory leak symptoms",
+    "tags": [
+      "memory_leak",
+      "cache",
+      "mobile_banking"
+    ],
+    "searchText": "mobile banking mobile banking api session cache optimization release deploy enhanced caching framework for mobile apis enabled new cache engine memory_leak cache mobile_banking mob-api-prod-01"
+  },
+  {
+    "id": "CHG50014",
+    "documentType": "changeRecord",
+    "serviceKey": "mobile-banking",
+    "changeId": "CHG50014",
+    "changeTitle": "Load Balancer Health Check Update",
+    "changeDescription": "Modify health probe configuration for API cluster",
+    "changeType": "Normal",
+    "changeCategory": "Network",
+    "changeStatus": "Completed",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "LB-MOB-PROD-01",
+    "implementationSummary": "Updated load balancer health checks",
+    "rollbackPerformed": false,
+    "validationResult": "Partially Successful",
+    "postImplementationIssues": [
+      "Uneven traffic routing observed"
+    ],
+    "relatedIncidentIds": [
+      "INC10014"
+    ],
+    "changeCorrelationNotes": "Explains load balancing issue causing slowness",
+    "tags": [
+      "load_balancer",
+      "health_check",
+      "network"
+    ],
+    "searchText": "mobile banking mobile banking api load balancer health check update modify health probe configuration for api cluster updated load balancer health checks load_balancer health_check network lb-mob-prod-01"
+  },
+  {
+    "id": "CHG50015",
+    "documentType": "changeRecord",
+    "serviceKey": "mobile-banking",
+    "changeId": "CHG50015",
+    "changeTitle": "DNS Infrastructure Update",
+    "changeDescription": "Change internal DNS records for mobile services",
+    "changeType": "Normal",
+    "changeCategory": "Network",
+    "changeStatus": "Completed",
+    "businessService": "Mobile Banking",
+    "applicationName": "Mobile Banking API",
+    "configurationItem": "DNS-PROD-01",
+    "implementationSummary": "Updated DNS aliases for service migration",
+    "rollbackPerformed": false,
+    "validationResult": "Successful with Warning",
+    "postImplementationIssues": [
+      "DNS propagation delays occurred"
+    ],
+    "relatedIncidentIds": [
+      "INC10015"
+    ],
+    "changeCorrelationNotes": "DNS changes match API failures",
+    "tags": [
+      "dns",
+      "mobile_banking",
+      "resolution_failure"
+    ],
+    "searchText": "mobile banking mobile banking api dns infrastructure update change internal dns records for mobile services updated dns aliases for service migration dns mobile_banking resolution_failure dns-prod-01"
+  },
+  {
+    "id": "CHG50016",
+    "documentType": "changeRecord",
+    "serviceKey": "regulatory-reporting-platform",
+    "changeId": "CHG50016",
+    "changeTitle": "ETL Mapping Deployment",
+    "changeDescription": "Deploy revised regulatory reporting mappings",
+    "changeType": "Normal",
+    "changeCategory": "Deployment",
+    "changeStatus": "Completed",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Regulatory Reporting ETL",
+    "configurationItem": "REG-ETL-PROD-01",
+    "implementationSummary": "Implemented new source-to-target mappings",
+    "rollbackPerformed": false,
+    "validationResult": "Partially Successful",
+    "postImplementationIssues": [
+      "Schema mismatch discovered"
+    ],
+    "relatedIncidentIds": [
+      "INC10016"
+    ],
+    "changeCorrelationNotes": "Strong match for reporting ETL failure",
+    "tags": [
+      "etl",
+      "schema_mismatch",
+      "reporting"
+    ],
+    "searchText": "regulatory reporting platform regulatory reporting etl etl mapping deployment deploy revised regulatory reporting mappings implemented new source-to-target mappings etl schema_mismatch reporting reg-etl-prod-01"
+  },
+  {
+    "id": "CHG50018",
+    "documentType": "changeRecord",
+    "serviceKey": "regulatory-reporting-platform",
+    "changeId": "CHG50018",
+    "changeTitle": "Batch Parameter Update",
+    "changeDescription": "Update reporting batch control parameters",
+    "changeType": "Normal",
+    "changeCategory": "Configuration",
+    "changeStatus": "Completed",
+    "businessService": "Regulatory Reporting Platform",
+    "applicationName": "Regulatory Reporting ETL",
+    "configurationItem": "REG-ETL-PROD-02",
+    "implementationSummary": "Modified business date parameter logic",
+    "rollbackPerformed": false,
+    "validationResult": "Partially Successful",
+    "postImplementationIssues": [
+      "Invalid parameter value detected"
+    ],
+    "relatedIncidentIds": [
+      "INC10018"
+    ],
+    "changeCorrelationNotes": "Correlation with ETL parameter failure",
+    "tags": [
+      "etl",
+      "parameter_update",
+      "reporting"
+    ],
+    "searchText": "regulatory reporting platform regulatory reporting etl batch parameter update update reporting batch control parameters modified business date parameter logic etl parameter_update reporting reg-etl-prod-02"
+  },
+  {
+    "id": "CHG50020",
+    "documentType": "changeRecord",
+    "serviceKey": "online-banking",
+    "changeId": "CHG50020",
+    "changeTitle": "Kubernetes Authentication Deployment",
+    "changeDescription": "Deploy updated authentication containers",
+    "changeType": "Emergency",
+    "changeCategory": "Deployment",
+    "changeStatus": "Rolled Back",
+    "businessService": "Online Banking",
+    "applicationName": "Authentication Service",
+    "configurationItem": "K8S-AUTH-PROD",
+    "implementationSummary": "Container image upgrade and manifest refresh",
+    "rollbackPerformed": true,
+    "validationResult": "Failed",
+    "postImplementationIssues": [
+      "Missing environment variable detected"
+    ],
+    "relatedIncidentIds": [
+      "INC10020"
+    ],
+    "changeCorrelationNotes": "Direct cause of pod restart loop",
+    "tags": [
+      "kubernetes",
+      "deployment",
+      "missing_env"
+    ],
+    "searchText": "online banking authentication service kubernetes authentication deployment deploy updated authentication containers container image upgrade and manifest refresh kubernetes deployment missing_env k8s-auth-prod"
+  },
+  {
+    "id": "CHG50021",
+    "documentType": "changeRecord",
+    "serviceKey": "customer-profile-service",
+    "changeId": "CHG50021",
+    "changeTitle": "Customer API Contract Release",
+    "changeDescription": "Introduce v3 customer profile response model",
+    "changeType": "Normal",
+    "changeCategory": "Deployment",
+    "changeStatus": "Rolled Back",
+    "businessService": "Customer Profile Service",
+    "applicationName": "Customer API",
+    "configurationItem": "CUST-API-PROD-01",
+    "implementationSummary": "Released updated API payload contract",
+    "rollbackPerformed": true,
+    "validationResult": "Failed",
+    "postImplementationIssues": [
+      "Consumer compatibility failures detected"
+    ],
+    "relatedIncidentIds": [
+      "INC10021"
+    ],
+    "changeCorrelationNotes": "Correlated to API contract mismatch incident",
+    "tags": [
+      "api_contract",
+      "deployment",
+      "customer_api"
+    ],
+    "searchText": "customer profile service customer api customer api contract release introduce v3 customer profile response model released updated api payload contract api_contract deployment customer_api cust-api-prod-01"
+  },
+  {
+    "id": "CHG50026",
+    "documentType": "changeRecord",
+    "serviceKey": "fraud-detection-platform",
+    "changeId": "CHG50026",
+    "changeTitle": "Fraud Rule Threshold Update",
+    "changeDescription": "Change fraud scoring thresholds for high-risk transactions",
+    "changeType": "Normal",
+    "changeCategory": "Configuration",
+    "changeStatus": "Completed",
+    "businessService": "Fraud Detection Platform",
+    "applicationName": "Fraud Rules Engine",
+    "configurationItem": "FRAUD-RULES-PROD-01",
+    "implementationSummary": "Updated risk scoring thresholds",
+    "rollbackPerformed": false,
+    "validationResult": "Successful with Warning",
+    "postImplementationIssues": [
+      "False positives increased after deployment"
+    ],
+    "relatedIncidentIds": [
+      "INC10026"
+    ],
+    "changeCorrelationNotes": "Strong RCA candidate for fraud rejection incident",
+    "tags": [
+      "fraud_rules",
+      "configuration",
+      "false_positive"
+    ],
+    "searchText": "fraud detection platform fraud rules engine fraud rule threshold update change fraud scoring thresholds for high-risk transactions updated risk scoring thresholds fraud_rules configuration false_positive fraud-rules-prod-01"
+  },
+  {
+    "id": "CHG50030",
+    "documentType": "changeRecord",
+    "serviceKey": "online-banking",
+    "changeId": "CHG50030",
+    "changeTitle": "DDoS Protection Policy Enhancement",
+    "changeDescription": "Deploy stricter traffic anomaly detection rules",
+    "changeType": "Emergency",
+    "changeCategory": "Security",
+    "changeStatus": "Completed",
+    "businessService": "Online Banking",
+    "applicationName": "API Gateway",
+    "configurationItem": "DDOS-PROD-EDGE-01",
+    "implementationSummary": "Implemented new DDoS protection baseline",
+    "rollbackPerformed": false,
+    "validationResult": "Successful with Warning",
+    "postImplementationIssues": [
+      "Legitimate customer traffic throttled"
+    ],
+    "relatedIncidentIds": [
+      "INC10030"
+    ],
+    "changeCorrelationNotes": "Security rule caused login traffic impact",
+    "tags": [
+      "ddos",
+      "security",
+      "throttling",
+      "login_failure"
+    ],
+    "searchText": "online banking api gateway ddos protection policy enhancement deploy stricter traffic anomaly detection rules implemented new ddos protection baseline ddos security throttling login_failure ddos-prod-edge-01"
+  }
+]
