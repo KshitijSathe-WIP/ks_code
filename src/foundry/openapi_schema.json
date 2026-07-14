@@ -51,132 +51,65 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "interpretedContext": {
+                    "interpreted_context": {
                       "type": "object",
                       "properties": {
-                        "businessService": {
-                          "type": "string",
-                          "description": "Inferred business service name"
-                        },
-                        "serviceKey": {
-                          "type": "string",
-                          "description": "Normalized service partition key"
-                        },
-                        "probableApplication": {
-                          "type": "string",
-                          "description": "Likely application name"
-                        },
-                        "symptoms": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          },
-                          "description": "Identified symptoms"
-                        },
-                        "keywords": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          },
-                          "description": "Extracted keywords"
-                        }
+                        "business_service": { "type": "string", "description": "Inferred business service name" },
+                        "service_key": { "type": "string", "description": "Normalized service partition key" },
+                        "probable_application": { "type": "string", "description": "Likely application name" },
+                        "symptoms": { "type": "array", "items": { "type": "string" }, "description": "Identified symptoms" },
+                        "keywords": { "type": "array", "items": { "type": "string" }, "description": "Extracted keywords" }
                       }
                     },
-                    "historicalMatches": {
+                    "historical_matches": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "incidentId": {
-                            "type": "string",
-                            "description": "Historical incident ID"
-                          },
-                          "similarityScore": {
-                            "type": "integer",
-                            "description": "Similarity score (0-100)"
-                          },
-                          "scoreBreakdown": {
+                          "incident_id": { "type": "string", "description": "Historical incident ID" },
+                          "similarity_score": { "type": "integer", "description": "Similarity score (0-100)" },
+                          "score_breakdown": {
                             "type": "object",
                             "properties": {
-                              "service": {
-                                "type": "integer"
-                              },
-                              "application": {
-                                "type": "integer"
-                              },
-                              "symptoms": {
-                                "type": "integer"
-                              },
-                              "tags": {
-                                "type": "integer"
-                              },
-                              "errorCode": {
-                                "type": "integer"
-                              },
-                              "configurationItem": {
-                                "type": "integer"
-                              }
+                              "service": { "type": "integer" },
+                              "application": { "type": "integer" },
+                              "symptoms": { "type": "integer" },
+                              "tags": { "type": "integer" },
+                              "error_code": { "type": "integer" },
+                              "configuration_item": { "type": "integer" }
                             }
                           },
-                          "incidentTitle": {
-                            "type": "string"
-                          },
-                          "rootCause": {
-                            "type": "string"
-                          },
-                          "rootCauseCategory": {
-                            "type": "string"
-                          },
-                          "linkedChangeId": {
-                            "type": "string"
-                          }
+                          "incident_title": { "type": "string" },
+                          "root_cause": { "type": "string" },
+                          "root_cause_category": { "type": "string" },
+                          "linked_change_id": { "type": "string" }
                         }
                       }
                     },
-                    "relatedChanges": {
+                    "related_changes": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "changeId": {
-                            "type": "string"
-                          },
-                          "changeTitle": {
-                            "type": "string"
-                          },
-                          "validationResult": {
-                            "type": "string"
-                          },
-                          "rollbackPerformed": {
-                            "type": "boolean"
-                          },
-                          "postImplementationIssues": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "changeSupported": {
-                            "type": "boolean",
-                            "description": "True if change evidence supports the root cause"
-                          }
+                          "change_id": { "type": "string" },
+                          "change_title": { "type": "string" },
+                          "validation_result": { "type": "string" },
+                          "rollback_performed": { "type": "boolean" },
+                          "post_implementation_issues": { "type": "array", "items": { "type": "string" } },
+                          "change_supported": { "type": "boolean", "description": "True if change evidence supports the root cause" }
                         }
                       }
-                    }
+                    },
+                    "request_id": { "type": "string" },
+                    "timestamp": { "type": "string" }
                   }
                 }
               }
             }
           },
-          "400": {
-            "description": "Bad request - invalid input"
-          },
-          "500": {
-            "description": "Internal server error"
-          },
-          "503": {
-            "description": "Service unavailable - Cosmos DB connection failed"
-          }
+          "400": { "description": "Bad request - invalid input" },
+          "500": { "description": "Internal server error" },
+          "503": { "description": "Service unavailable - Cosmos DB connection failed" }
         }
       }
     }
