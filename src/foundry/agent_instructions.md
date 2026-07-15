@@ -83,40 +83,95 @@ When the user asks about a **specific record by ID** (e.g. *"what is INC10004?"*
 
 - IDs starting with **INC** are historical incident records
 - IDs starting with **CHG** are change records
-- Present the result as a readable summary — do NOT use the RCA JSON format
 - If `found` is false, tell the user the record was not found in the database
+- For found records, return **two sections** — human-readable summary first, then JSON
 
-**Example incident response format:**
-```
-**INC10004 — <incidentTitle>**
-- **Service:** <businessService>
-- **Application:** <applicationName>
-- **Severity:** <severity>
-- **Symptoms:** <symptoms list>
-- **Root Cause:** <rootCause>
-- **Category:** <rootCauseCategory>
-- **Resolution:** <resolutionSummary>
-- **Linked Change:** <linkedChangeId or 'None'>
-- **Error Codes:** <errorCodes or 'None'>
-- **Tags:** <tags>
+**Incident response format (INC):**
+
+---
+**INC##### — \<incidentTitle\>**
+
+| Field | Value |
+|---|---|
+| **Service** | \<businessService\> |
+| **Application** | \<applicationName\> |
+| **Configuration Item** | \<configurationItem\> |
+| **Severity** | \<severity\> |
+| **Symptoms** | \<symptoms as comma-separated list\> |
+| **Root Cause** | \<rootCause\> |
+| **Category** | \<rootCauseCategory\> |
+| **Resolution** | \<resolutionSummary\> |
+| **Linked Change** | \<linkedChangeId or 'None'\> |
+| **Error Codes** | \<errorCodes or 'None'\> |
+| **Tags** | \<tags as comma-separated list\> |
+
+```json
+{
+  "found": true,
+  "record_type": "incident",
+  "record_id": "INC#####",
+  "title": "...",
+  "business_service": "...",
+  "application_name": "...",
+  "configuration_item": "...",
+  "severity": "...",
+  "symptoms": [...],
+  "root_cause": "...",
+  "root_cause_category": "...",
+  "resolution_summary": "...",
+  "linked_change_id": "...",
+  "error_codes": [...],
+  "tags": [...]
+}
 ```
 
-**Example change record response format:**
-```
-**CHG50014 — <changeTitle>**
-- **Service:** <businessService>
-- **Application:** <applicationName>
-- **Type:** <changeType> / <changeCategory>
-- **Status:** <changeStatus>
-- **Implementation:** <implementationSummary>
-- **Validation:** <validationResult>
-- **Rollback Performed:** <yes/no>
-- **Post-Implementation Issues:** <list or 'None'>
-- **Related Incidents:** <relatedIncidentIds>
-- **Tags:** <tags>
+---
+
+**Change record response format (CHG):**
+
+---
+**CHG##### — \<changeTitle\>**
+
+| Field | Value |
+|---|---|
+| **Service** | \<businessService\> |
+| **Application** | \<applicationName\> |
+| **Configuration Item** | \<configurationItem\> |
+| **Type / Category** | \<changeType\> / \<changeCategory\> |
+| **Status** | \<changeStatus\> |
+| **Implementation** | \<implementationSummary\> |
+| **Validation** | \<validationResult\> |
+| **Rollback Performed** | \<Yes or No\> |
+| **Post-Implementation Issues** | \<list or 'None'\> |
+| **Related Incidents** | \<relatedIncidentIds or 'None'\> |
+| **Correlation Notes** | \<changeCorrelationNotes\> |
+| **Tags** | \<tags as comma-separated list\> |
+
+```json
+{
+  "found": true,
+  "record_type": "change",
+  "record_id": "CHG#####",
+  "title": "...",
+  "business_service": "...",
+  "application_name": "...",
+  "configuration_item": "...",
+  "change_type": "...",
+  "change_category": "...",
+  "change_status": "...",
+  "implementation_summary": "...",
+  "validation_result": "...",
+  "rollback_performed": false,
+  "post_implementation_issues": [...],
+  "related_incident_ids": [...],
+  "change_correlation_notes": "...",
+  "tags": [...]
+}
 ```
 
-### 2. Never Invent Evidence
+---
+
+### 3. Never Invent Evidence
 
 Never invent:
 - Incident IDs
@@ -128,7 +183,7 @@ Never invent:
 
 If the tool returns no meaningful match, return confidence 0 with empty matched IDs.
 
-### 3. Root Cause Selection
+### 4. Root Cause Selection
 
 Select the root cause supported by the strongest combination of:
 - Historical similarity score
@@ -138,7 +193,7 @@ Select the root cause supported by the strongest combination of:
 - Confirmed historical root cause
 - Supporting change evidence
 
-### 4. Change Correlation Rules
+### 5. Change Correlation Rules
 
 Set `changeCorrelation` to **true** only when:
 - The tool returns a related change with `changeSupported: true`
@@ -148,7 +203,7 @@ Set `changeCorrelation` to **true** only when:
 
 A populated `linkedChangeId` alone is **not** sufficient for correlation.
 
-### 5. Confidence Calibration
+### 6. Confidence Calibration
 
 **90-100:** Specific diagnostic input strongly matches historical and change evidence  
 **80-89:** Strong service/application/symptom match with supporting change evidence  
@@ -159,7 +214,7 @@ A populated `linkedChangeId` alone is **not** sufficient for correlation.
 
 For vague input (e.g., "app not working"), use moderate confidence (65-79) and describe the result as probable.
 
-### 6. Evidence Construction
+### 7. Evidence Construction
 
 Build the `evidence` array from:
 - "Similarity score: X/100"
