@@ -122,6 +122,94 @@ paths:
           description: Internal server error
         '503':
           description: Service unavailable - Cosmos DB connection failed
+  /api/rca/lookup/{record_id}:
+    get:
+      operationId: get_record_by_id
+      summary: Look up a specific incident or change record by ID
+      description: Returns the full details of a historical incident (INC prefix) or change record (CHG prefix) by its exact ID.
+      parameters:
+        - name: record_id
+          in: path
+          required: true
+          description: The record ID — INC##### for incidents, CHG##### for change records
+          schema:
+            type: string
+            pattern: '^(INC|CHG)\d+$'
+            example: INC10004
+      responses:
+        '200':
+          description: Record detail (found=false if not in database)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:
+                    type: boolean
+                  record_type:
+                    type: string
+                    enum: [incident, change]
+                  record_id:
+                    type: string
+                  title:
+                    type: string
+                  business_service:
+                    type: string
+                  application_name:
+                    type: string
+                  configuration_item:
+                    type: string
+                  severity:
+                    type: string
+                  symptoms:
+                    type: array
+                    items:
+                      type: string
+                  root_cause:
+                    type: string
+                  root_cause_category:
+                    type: string
+                  resolution_summary:
+                    type: string
+                  linked_change_id:
+                    type: string
+                  error_codes:
+                    type: array
+                    items:
+                      type: string
+                  change_type:
+                    type: string
+                  change_category:
+                    type: string
+                  change_status:
+                    type: string
+                  implementation_summary:
+                    type: string
+                  validation_result:
+                    type: string
+                  rollback_performed:
+                    type: boolean
+                  post_implementation_issues:
+                    type: array
+                    items:
+                      type: string
+                  related_incident_ids:
+                    type: array
+                    items:
+                      type: string
+                  change_correlation_notes:
+                    type: string
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - found
+                  - record_id
+        '400':
+          description: Invalid record_id prefix (must be INC or CHG)
+        '503':
+          description: Service unavailable - Cosmos DB connection failed
 components:
   securitySchemes:
     noAuth:

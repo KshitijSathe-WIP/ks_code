@@ -85,3 +85,37 @@ class RCAResponse(BaseModel):
     related_change_id: str
     change_correlation: bool
     evidence: List[str]
+
+
+class RecordLookupResponse(BaseModel):
+    """Unified response for direct INC/CHG record lookup."""
+    found: bool
+    record_type: Optional[str] = None          # 'incident' or 'change'
+    record_id: str
+    title: Optional[str] = None
+    business_service: Optional[str] = None
+    application_name: Optional[str] = None
+    configuration_item: Optional[str] = None
+    # Incident-specific
+    severity: Optional[str] = None
+    symptoms: List[str] = Field(default_factory=list)
+    root_cause: Optional[str] = None
+    root_cause_category: Optional[str] = None
+    resolution_summary: Optional[str] = None
+    linked_change_id: Optional[str] = None
+    error_codes: List[str] = Field(default_factory=list)
+    # Change-specific
+    change_type: Optional[str] = None
+    change_category: Optional[str] = None
+    change_status: Optional[str] = None
+    implementation_summary: Optional[str] = None
+    validation_result: Optional[str] = None
+    rollback_performed: Optional[bool] = None
+    post_implementation_issues: List[str] = Field(default_factory=list)
+    related_incident_ids: List[str] = Field(default_factory=list)
+    change_correlation_notes: Optional[str] = None
+    # Common
+    tags: List[str] = Field(default_factory=list)
+
+# Backward-compatible alias
+IncidentLookupResponse = RecordLookupResponse

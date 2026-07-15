@@ -1,25 +1,46 @@
-{
-  "type": "function",
-  "function": {
-    "name": "search_incident_rca_evidence",
-    "description": "Search historical incident and change evidence to support root cause analysis. Returns grounded matches from Cosmos DB with similarity scores, historical incidents, and related change records. Use this tool for every RCA request before determining a root cause.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "incident_description": {
-          "type": "string",
-          "description": "The user's complete incident description. Can be short and nontechnical (e.g., 'Mobile banking app not working'). Preserve the original user text without modification."
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "search_incident_rca_evidence",
+      "description": "Search historical incident and change evidence to support root cause analysis. Returns grounded matches from Cosmos DB with similarity scores, historical incidents, and related change records. Use this tool for every RCA request before determining a root cause.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "incident_description": {
+            "type": "string",
+            "description": "The user's complete incident description. Can be short and nontechnical (e.g., 'Mobile banking app not working'). Preserve the original user text without modification."
+          },
+          "top_incident_count": {
+            "type": "integer",
+            "description": "Maximum number of historical incidents to return. Default is 3. Lower values focus on top matches, higher values provide more context.",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 3
+          }
         },
-        "top_incident_count": {
-          "type": "integer",
-          "description": "Maximum number of historical incidents to return. Default is 3. Lower values focus on top matches, higher values provide more context.",
-          "minimum": 1,
-          "maximum": 5,
-          "default": 3
-        }
-      },
-      "required": ["incident_description"],
-      "additionalProperties": false
+        "required": ["incident_description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "get_record_by_id",
+      "description": "Look up a specific historical incident or change record by its exact ID. Use INC##### format for incident records and CHG##### format for change records. Call this tool when the user asks about a specific record by ID (e.g., 'what is INC10004?' or 'show me CHG50014').",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "description": "The exact record ID to look up. Must start with INC (incident) or CHG (change record), e.g. INC10004 or CHG50014.",
+            "pattern": "^(INC|CHG)\\d+$"
+          }
+        },
+        "required": ["record_id"],
+        "additionalProperties": false
+      }
     }
   }
-}
+]

@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.models import (
     HealthResponse, EvidenceRequest, EvidenceResponse,
-    InterpretedContext, HistoricalMatch, RelatedChange, ScoreBreakdown
+    InterpretedContext, HistoricalMatch, RelatedChange, ScoreBreakdown,
+    RecordLookupResponse
 )
 from src.api.settings import settings
 from src.cosmos.client import get_cosmos_client, CosmosDBClient
@@ -153,6 +154,74 @@ async def get_rca_evidence(
     except Exception as e:
         logger.error(f"Error processing evidence request: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/rca/lookup/{record_id}", response_model=RecordLookupResponse)
+async def lookup_record_by_id(
+    record_id: str,
+    cosmos_client: CosmosDBClient = Depends(get_cosmos_db_client)
+) -> RecordLookupResponse:
+    """
+    Look up a historical incident (INC prefix) or change record (CHG prefix) by ID.
+
+    Args:
+        record_id: The record ID — INC##### for incidents, CHG##### for changes
+
+    Returns:
+        Full record detail or a not-found response
+    """
+    from src.cosmos.repositories import IncidentRepository, ChangeRepository
+
+    prefix = record_id[:3].upper()
+    logger.info(f"Record lookup requested: {record_id}")
+
+    if prefix == "INC":
+        doc = IncidentRepository(cosmos_client).query_by_incident_id(record_id)
+        if not doc:
+            return RecordLookupResponse(found=False, record_id=record_id)
+        return RecordLookupResponse(
+            found=True,
+            record_type="incident",
+            record_id=doc.get("incidentId", record_id),
+            title=doc.get("incidentTitle"),
+            business_service=doc.get("businessService"),
+            application_name=doc.get("applicationName"),
+            configuration_item=doc.get("configurationItem"),
+            severity=doc.get("severity"),
+            symptoms=doc.get("symptoms", []),
+            root_cause=doc.get("rootCause"),
+            root_cause_category=doc.get("rootCauseCategory"),
+            resolution_summary=doc.get("resolutionSummary"),
+            linked_change_id=doc.get("linkedChangeId"),
+            error_codes=doc.get("errorCodes", []),
+            tags=doc.get("tags", []),
+        )
+
+    if prefix == "CHG":
+        doc = ChangeRepository(cosmos_client).query_by_change_id(record_id)
+        if not doc:
+            return RecordLookupResponse(found=False, record_id=record_id)
+        return RecordLookupResponse(
+            found=True,
+            record_type="change",
+            record_id=doc.get("changeId", record_id),
+            title=doc.get("changeTitle"),
+            business_service=doc.get("businessService"),
+            application_name=doc.get("applicationName"),
+            configuration_item=doc.get("configurationItem"),
+            change_type=doc.get("changeType"),
+            change_category=doc.get("changeCategory"),
+            change_status=doc.get("changeStatus"),
+            implementation_summary=doc.get("implementationSummary"),
+            validation_result=doc.get("validationResult"),
+            rollback_performed=doc.get("rollbackPerformed", False),
+            post_implementation_issues=doc.get("postImplementationIssues", []),
+            related_incident_ids=doc.get("relatedIncidentIds", []),
+            change_correlation_notes=doc.get("changeCorrelationNotes"),
+            tags=doc.get("tags", []),
+        )
+
+    raise HTTPException(status_code=400, detail="record_id must start with INC or CHG")
 
 
 @app.get("/")

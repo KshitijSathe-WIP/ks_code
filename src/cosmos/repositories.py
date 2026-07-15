@@ -117,6 +117,37 @@ class IncidentRepository:
             
         except CosmosHttpResponseError as e:
             raise CosmosDBException(f"Error querying all incidents: {e}")
+
+    def query_by_incident_id(self, incident_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a single incident by incidentId (cross-partition).
+        Used for direct lookups when the service key is not known.
+
+        Args:
+            incident_id: The incident ID (e.g. INC10004)
+
+        Returns:
+            Incident document or None if not found
+        """
+        try:
+            query = "SELECT * FROM c WHERE c.incidentId = @incidentId AND c.documentType = 'historicalIncident'"
+            parameters = [{"name": "@incidentId", "value": incident_id}]
+
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True,
+            ))
+
+            if items:
+                logger.info(f"Found incident by ID: {incident_id}")
+                return items[0]
+
+            logger.warning(f"Incident not found by ID: {incident_id}")
+            return None
+
+        except CosmosHttpResponseError as e:
+            raise CosmosDBException(f"Error querying incident by ID: {e}")
     
     def create(self, incident: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -173,6 +204,37 @@ class ChangeRepository:
                 return None
             raise CosmosDBException(f"Error retrieving change: {e}")
     
+    def query_by_change_id(self, change_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a single change record by changeId (cross-partition).
+        Used for direct lookups when the service key is not known.
+
+        Args:
+            change_id: The change ID (e.g. CHG50004)
+
+        Returns:
+            Change document or None if not found
+        """
+        try:
+            query = "SELECT * FROM c WHERE c.changeId = @changeId AND c.documentType = 'changeRecord'"
+            parameters = [{"name": "@changeId", "value": change_id}]
+
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True,
+            ))
+
+            if items:
+                logger.info(f"Found change record by ID: {change_id}")
+                return items[0]
+
+            logger.warning(f"Change record not found by ID: {change_id}")
+            return None
+
+        except CosmosHttpResponseError as e:
+            raise CosmosDBException(f"Error querying change by ID: {e}")
+
     def create(self, change: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new change record document.

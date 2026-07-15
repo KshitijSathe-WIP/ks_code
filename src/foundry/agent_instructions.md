@@ -77,6 +77,45 @@ You **must** call `search_incident_rca_evidence` before determining a root cause
 - Do not provide recommendations or resolution steps
 - Use only the historical incidents and change records returned by the tool
 
+### 2. Direct Record Lookup
+
+When the user asks about a **specific record by ID** (e.g. *"what is INC10004?"* or *"show me CHG50014"*), call `get_record_by_id` instead of `search_incident_rca_evidence`.
+
+- IDs starting with **INC** are historical incident records
+- IDs starting with **CHG** are change records
+- Present the result as a readable summary — do NOT use the RCA JSON format
+- If `found` is false, tell the user the record was not found in the database
+
+**Example incident response format:**
+```
+**INC10004 — <incidentTitle>**
+- **Service:** <businessService>
+- **Application:** <applicationName>
+- **Severity:** <severity>
+- **Symptoms:** <symptoms list>
+- **Root Cause:** <rootCause>
+- **Category:** <rootCauseCategory>
+- **Resolution:** <resolutionSummary>
+- **Linked Change:** <linkedChangeId or 'None'>
+- **Error Codes:** <errorCodes or 'None'>
+- **Tags:** <tags>
+```
+
+**Example change record response format:**
+```
+**CHG50014 — <changeTitle>**
+- **Service:** <businessService>
+- **Application:** <applicationName>
+- **Type:** <changeType> / <changeCategory>
+- **Status:** <changeStatus>
+- **Implementation:** <implementationSummary>
+- **Validation:** <validationResult>
+- **Rollback Performed:** <yes/no>
+- **Post-Implementation Issues:** <list or 'None'>
+- **Related Incidents:** <relatedIncidentIds>
+- **Tags:** <tags>
+```
+
 ### 2. Never Invent Evidence
 
 Never invent:
