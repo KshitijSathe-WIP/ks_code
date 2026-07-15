@@ -47,6 +47,63 @@ When a production incident occurs, engineers describe the problem in plain Engli
 
 ---
 
+### Request & Data Flow
+
+The sequence below traces a single request from the moment an engineer types a description through to the final RCA response.
+
+```mermaid
+flowchart TD
+    A["👤 User types in Azure Foundry Chat\n'Mobile banking app not working'"]
+    B["🤖 Foundry Agent\n(agent_instructions.md)\nDecides to call tool"]
+    C["POST /api/rca/evidence\n{ incident_description, top_incident_count }"]
+    D["FastAPI — main.py\nget_rca_evidence()"]
+    E["EvidenceRetrievalService\nevidence_service.py\nretrieve_evidence()"]
+
+    F["① Normalizer\nnormalizer.py\ninterpret(description)"]
+    G["Extracts: businessService, serviceKey,\nprobableApplication, symptoms, keywords\nvia synonym dictionaries"]
+
+    H["② Cosmos DB Query\nrepositories.py"]
+    I{service_key\nfound?}
+    J["IncidentRepository\nquery_by_service()\n— partition-scoped, fast"]
+    K["IncidentRepository\nquery_all_resolved()\n— cross-partition fallback"]
+
+    L["③ Scorer\nscorer.py\nscore_and_rank()"]
+    M["Weighted scoring per candidate:\n+25 service match\n+20 application match\n+25 symptom overlap\n+15 tag/searchText overlap\n+10 error code match\n+5 config item match\n→ top-K returned"]
+
+    N["④ Change Correlator\ncorrelation.py\ncorrelate_change()"]
+    O["For each scored incident:\nfetch linked change record\nfrom ChangeRepository"]
+
+    P["EvidenceResponse\n(interpretedContext,\nhistoricalMatches w/ score_breakdown,\nrelatedChanges)"]
+    Q["🤖 Foundry Agent\nreads grounded evidence\ngenerates RCA narrative"]
+    R["👤 User sees\nroot cause analysis"]
+
+    A --> B --> C --> D --> E
+    E --> F --> G
+    G --> H --> I
+    I -- yes --> J
+    I -- no --> K
+    J --> L
+    K --> L
+    L --> M --> N --> O
+    O --> P --> Q --> R
+```
+
+**Key files per stage:**
+
+| Stage | File |
+|---|---|
+| Tool schema (Foundry) | `src/foundry/tool_schema.json` |
+| Agent instructions | `src/foundry/agent_instructions.md` |
+| HTTP endpoint | `src/api/main.py` — `POST /api/rca/evidence` |
+| Orchestration | `src/retrieval/evidence_service.py` — `retrieve_evidence()` |
+| NL → context | `src/retrieval/normalizer.py` — synonym dicts + `interpret()` |
+| Cosmos fetch | `src/cosmos/repositories.py` — `IncidentRepository`, `ChangeRepository` |
+| Scoring | `src/retrieval/scorer.py` — `DeterministicScorer` (max 100 pts) |
+| Change link | `src/retrieval/correlation.py` — `ChangeCorrelator` |
+| Response models | `src/api/models.py` |
+
+---
+
 ### How the Matching % Is Determined
 
 The similarity score is a **rule-based, fully transparent algorithm** — not AI or a black box. Each incident description is broken into components and compared against every historical record across 6 dimensions:
