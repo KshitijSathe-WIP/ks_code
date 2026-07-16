@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     
+    # API Key Authentication (set RCA_API_KEY env var on App Service)
+    rca_api_key: Optional[str] = None
+
     # Retrieval Configuration
     max_candidate_count: int = 25
     top_incident_count: int = 3

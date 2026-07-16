@@ -1,8 +1,9 @@
 """Main FastAPI application."""
 import uuid
 from datetime import datetime, UTC
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 
 from src.api.models import (
     HealthResponse, EvidenceRequest, EvidenceResponse,
@@ -34,6 +35,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# API key security scheme — header name must match openapi_schema_prod.yaml
+_api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+
+
+async def verify_api_key(key: str = Security(_api_key_header)) -> None:
+    """Validate x-api-key header. Skipped when RCA_API_KEY is not configured."""
+    if not settings.rca_api_key:
+        return  # key not configured — open access (dev / local)
+    if key != settings.rca_api_key:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
 
 
 # Dependency for Cosmos DB client
@@ -79,6 +92,7 @@ async def health_check() -> HealthResponse:
 @app.post("/api/rca/evidence", response_model=EvidenceResponse)
 async def get_rca_evidence(
     request: EvidenceRequest,
+    _: None = Depends(verify_api_key),
     evidence_service: EvidenceRetrievalService = Depends(get_evidence_service)
 ) -> EvidenceResponse:
     """
@@ -159,6 +173,7 @@ async def get_rca_evidence(
 @app.get("/api/rca/lookup/{record_id}", response_model=RecordLookupResponse)
 async def lookup_record_by_id(
     record_id: str,
+    _: None = Depends(verify_api_key),
     cosmos_client: CosmosDBClient = Depends(get_cosmos_db_client)
 ) -> RecordLookupResponse:
     """
