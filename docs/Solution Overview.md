@@ -68,7 +68,7 @@ flowchart TD
     K["IncidentRepository\nquery_all_resolved()\n— cross-partition fallback"]
 
     L["③ Scorer\nscorer.py\nscore_and_rank()"]
-    M["Weighted scoring per candidate:\n+25 service match\n+20 application match\n+25 symptom overlap\n+15 tag/searchText overlap\n+10 error code match\n+5 config item match\n→ top-K returned"]
+    M["Weighted scoring per candidate:\n+25 service match\n+20 application match\n+25 symptom overlap\n+15 tag/searchText overlap\n+15 phrase boost\n+10 error code match\n+5 config item match\n→ top-K (adaptive threshold)"]
 
     N["④ Change Correlator\ncorrelation.py\ncorrelate_change()"]
     O["For each scored incident:\nfetch linked change record\nfrom ChangeRepository"]
@@ -104,6 +104,47 @@ flowchart TD
 
 ---
 
+### API Contract — `POST /api/rca/evidence`
+
+**Input (`EvidenceRequest`)**
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `incident_description` | string | Yes | 5–500 chars | Plain-English description of the incident |
+| `top_incident_count` | int | No (default: 3) | 1–5 | Max historical matches to return |
+
+**Output (`EvidenceResponse`)**
+
+| Field | Type | Description |
+|---|---|---|
+| `request_id` | string | UUID for the request |
+| `timestamp` | string | ISO-8601 UTC timestamp |
+| `interpreted_context` | object | Entities extracted from the description: `business_service`, `service_key`, `probable_application`, `symptoms[]`, `keywords[]` |
+| `historical_matches` | array | Top-scored past incidents, each with `incident_id`, `incident_title`, `root_cause`, `root_cause_category`, `similarity_score`, `score_breakdown`, `linked_change_id`, `confidence` (`"high"` = strict threshold passed; `"low"` = fallback match) |
+| `related_changes` | array | Change records linked to the matches, each with `change_id`, `change_title`, `validation_result`, `rollback_performed`, `post_implementation_issues[]`, `change_supported` |
+
+**Additional endpoints**
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Returns API status, Cosmos DB connectivity, and Foundry configuration flags |
+| `GET /api/records/{id}` | Direct lookup of a single INC or CHG record by ID; returns full record detail (`RecordLookupResponse`) |
+
+---
+
+### Cosmos DB Data Model
+
+Two containers, both partitioned by `serviceKey`:
+
+| Container | Repository class | Document type filter | Content |
+|---|---|---|---|
+| `historical_incidents` | `IncidentRepository` | `documentType = 'historicalIncident'` | Resolved incidents with root cause, symptoms, tags, linked change ID |
+| `change_records` | `ChangeRepository` | `documentType = 'changeRecord'` | Change records with validation result, rollback flag, post-implementation issues |
+
+The `serviceKey` partition key (e.g. `mobile-banking`, `payments-platform`) keeps related incidents co-located for fast single-partition queries. A cross-partition fallback is used only when no service can be inferred from the description.
+
+---
+
 ### How the Matching % Is Determined
 
 The similarity score is a **rule-based, fully transparent algorithm** — not AI or a black box. Each incident description is broken into components and compared against every historical record across 6 dimensions:
@@ -116,9 +157,14 @@ The similarity score is a **rule-based, fully transparent algorithm** — not AI
 | **Tags / Search Text** | 15 | Do general keywords match tags in the historical record? |
 | **Error Code** | 10 | Is a specific error code mentioned that matches a historical one? |
 | **Configuration Item** | 5 | Does the server or component name match? |
-| **Total** | **100** | Only incidents scoring **30+** are returned |
+| **Phrase Boost** | 15 | Do high-signal phrase combinations appear? (e.g., *"ssl + certificate"* → matches `ssl_certificate`/`certificate_expiry` tags; *"login + failure"* → matches `login_failure`; *"ldap"* → matches `ldap_timeout`). Capped at 15 per incident. |
+| **Total** | **115 max** | Incidents scoring **≥ 30** are returned as `confidence: "high"` matches |
 
-Plain English is first normalised using synonym dictionaries before scoring — so *"payments failing"* automatically maps to the `payments-platform` service with symptoms `[failed, error]`, without the engineer needing to use technical terms.
+Plain English is first normalised using synonym dictionaries before scoring — so *"payments failing"* automatically maps to the `payments-platform` service with symptoms `[failed, error]`, without the engineer needing to use technical terms. The synonym dictionary covers service names, generic failure patterns, and technology-specific terms including SSL/TLS/certificate, LDAP, and database connection keywords.
+
+**Adaptive threshold** — when no service can be identified from the description (e.g. the engineer omits the service name), the minimum threshold is automatically reduced from 30 to 20. This prevents false negatives on valid but service-agnostic queries while preserving precision for service-scoped queries.
+
+**Low-confidence fallback** — if no incident reaches even the adaptive threshold, a second-pass retrieval runs at threshold 15 and returns candidates flagged as `confidence: "low"`. This ensures the agent always surfaces the closest available match rather than a hard *"no evidence found"* response.
 
 Every point awarded corresponds to a specific matching criterion, making every result fully auditable and explainable.
 
@@ -156,3 +202,11 @@ A structured response a human can act on immediately:
 | API | Python FastAPI on Azure App Service |
 | Database | Azure Cosmos DB (NoSQL) |
 | Source Control & CI/CD | GitHub (`td-rca-api` branch) |
+
+---
+
+### Change Log
+
+| Date | Change | Files |
+|------|--------|-------|
+| 2026-07-17 | **Retrieval robustness — phrase boost, adaptive threshold, low-confidence fallback.** Fixed false-negative for INC10003 "Login Failure Due to Expired SSL Certificate" (previously scored 15, below threshold 30; now scores 33). Added `PHRASE_BOOST_RULES` (+15 for high-signal keyword+tag combinations), adaptive threshold (30 → 20 when service key absent), `confidence` field on `HistoricalMatch`, and automatic fallback retrieval at threshold 15. Extended `SYMPTOM_SYNONYMS` to cover SSL/TLS/certificate/expired/handshake terms. | `src/retrieval/scorer.py`, `src/retrieval/normalizer.py`, `src/retrieval/evidence_service.py` |
