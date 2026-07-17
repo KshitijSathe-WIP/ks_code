@@ -23,6 +23,7 @@ class HistoricalMatch:
     root_cause: str
     root_cause_category: str
     linked_change_id: Optional[str] = None
+    confidence: str = "high"  # "high" = passed strict threshold; "low" = fallback match
 
 
 @dataclass
@@ -179,10 +180,45 @@ class EvidenceRetrievalService:
             )
             
             if not scored_incidents:
-                logger.warning("No incidents met minimum score threshold")
+                logger.warning("No incidents met minimum score threshold — attempting fallback retrieval")
+                fallback_incidents = self.scorer.get_fallback_matches(
+                    context=context,
+                    candidates=candidates,
+                    top_k=top_incident_count
+                )
+                if not fallback_incidents:
+                    logger.warning("No incidents met fallback threshold either")
+                    return EvidenceResult(
+                        interpreted_context=asdict(context),
+                        historical_matches=[],
+                        related_changes=[]
+                    )
+                # Build low-confidence matches — no change correlation for fallbacks
+                historical_matches = [
+                    HistoricalMatch(
+                        incident_id=scored.incident_id,
+                        similarity_score=scored.score,
+                        score_breakdown={
+                            "service": scored.breakdown.service,
+                            "application": scored.breakdown.application,
+                            "symptoms": scored.breakdown.symptoms,
+                            "tags": scored.breakdown.tags,
+                            "error_code": scored.breakdown.error_code,
+                            "configuration_item": scored.breakdown.configuration_item,
+                            "phrase_boost": scored.breakdown.phrase_boost,
+                        },
+                        incident_title=scored.incident_title,
+                        root_cause=scored.root_cause,
+                        root_cause_category=scored.root_cause_category,
+                        linked_change_id=scored.linked_change_id,
+                        confidence="low",
+                    )
+                    for scored in fallback_incidents
+                ]
+                logger.info(f"Fallback returned {len(historical_matches)} low-confidence match(es)")
                 return EvidenceResult(
                     interpreted_context=asdict(context),
-                    historical_matches=[],
+                    historical_matches=historical_matches,
                     related_changes=[]
                 )
             
@@ -198,12 +234,14 @@ class EvidenceRetrievalService:
                         "symptoms": scored.breakdown.symptoms,
                         "tags": scored.breakdown.tags,
                         "error_code": scored.breakdown.error_code,
-                        "configuration_item": scored.breakdown.configuration_item
+                        "configuration_item": scored.breakdown.configuration_item,
+                        "phrase_boost": scored.breakdown.phrase_boost,
                     },
                     incident_title=scored.incident_title,
                     root_cause=scored.root_cause,
                     root_cause_category=scored.root_cause_category,
-                    linked_change_id=scored.linked_change_id
+                    linked_change_id=scored.linked_change_id,
+                    confidence="high",
                 )
                 historical_matches.append(match)
             

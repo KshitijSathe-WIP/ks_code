@@ -1,10 +1,55 @@
 """Deterministic scoring algorithm for incident matching."""
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass
 from src.retrieval.normalizer import InterpretedContext
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Minimum score used for a second-pass low-confidence retrieval.
+FALLBACK_THRESHOLD = 15
+
+# Adaptive threshold reduction when no service key is present in the query.
+_NO_SERVICE_THRESHOLD_REDUCTION = 10
+
+# Phrase-level boost rules.  Each rule fires when ALL required_keywords appear
+# in the query AND at least one required tag or category matches the incident.
+PHRASE_BOOST_RULES = [
+    # SSL / certificate patterns
+    {
+        "required_keywords": {"ssl", "certificate"},
+        "required_tags": {"ssl_certificate", "certificate_expiry"},
+        "boost": 15,
+    },
+    {
+        "required_keywords": {"expired", "certificate"},
+        "required_tags": {"certificate_expiry"},
+        "boost": 15,
+    },
+    {
+        "required_keywords": {"ssl", "expired"},
+        "required_tags": {"ssl_certificate", "certificate_expiry"},
+        "boost": 15,
+    },
+    # Login failure patterns
+    {
+        "required_keywords": {"login", "failure"},
+        "required_tags": {"login_failure"},
+        "boost": 10,
+    },
+    # LDAP / directory patterns
+    {
+        "required_keywords": {"ldap"},
+        "required_tags": {"ldap_timeout"},
+        "boost": 12,
+    },
+    # Database connection pool patterns
+    {
+        "required_keywords": {"database", "connection"},
+        "required_tags": {"connection_pool", "database"},
+        "boost": 12,
+    },
+]
 
 
 @dataclass
@@ -16,6 +61,7 @@ class ScoreBreakdown:
     tags: int = 0
     error_code: int = 0
     configuration_item: int = 0
+    phrase_boost: int = 0
     
     @property
     def total(self) -> int:
@@ -26,7 +72,8 @@ class ScoreBreakdown:
             self.symptoms +
             self.tags +
             self.error_code +
-            self.configuration_item
+            self.configuration_item +
+            self.phrase_boost
         )
 
 
@@ -277,6 +324,56 @@ class DeterministicScorer:
         """
         # For demo, we don't extract CIs from natural language
         return 0
+
+    def calculate_phrase_boost(
+        self,
+        context: InterpretedContext,
+        incident: Dict[str, Any]
+    ) -> int:
+        """
+        Calculate phrase-level boost score.
+
+        Fires PHRASE_BOOST_RULES when all required keywords from the query
+        are present and the incident matches the expected tags/category.
+        Capped at 15 to avoid overwhelming the weighted scoring.
+
+        Args:
+            context: Interpreted context
+            incident: Candidate incident
+
+        Returns:
+            Phrase boost score (0-15)
+        """
+        if not context.keywords:
+            return 0
+
+        query_keywords = {self.normalize_text(k) for k in context.keywords}
+        incident_tags = {t.lower() for t in incident.get("tags", [])}
+        incident_category = incident.get("rootCauseCategory", "").lower()
+
+        total_boost = 0
+        for rule in PHRASE_BOOST_RULES:
+            required_kw = {self.normalize_text(k) for k in rule["required_keywords"]}
+            if not required_kw.issubset(query_keywords):
+                continue
+
+            required_tags = rule.get("required_tags", set())
+            required_category = rule.get("required_category", set())
+
+            tag_match = bool(required_tags & incident_tags)
+            category_match = incident_category in {c.lower() for c in required_category}
+
+            if required_tags and required_category:
+                if tag_match or category_match:
+                    total_boost += rule["boost"]
+            elif required_tags:
+                if tag_match:
+                    total_boost += rule["boost"]
+            elif required_category:
+                if category_match:
+                    total_boost += rule["boost"]
+
+        return min(total_boost, 15)
     
     def score_incident(
         self,
@@ -299,7 +396,8 @@ class DeterministicScorer:
             symptoms=self.calculate_symptom_score(context, incident),
             tags=self.calculate_tag_score(context, incident),
             error_code=self.calculate_error_code_score(context, incident),
-            configuration_item=self.calculate_configuration_item_score(context, incident)
+            configuration_item=self.calculate_configuration_item_score(context, incident),
+            phrase_boost=self.calculate_phrase_boost(context, incident)
         )
         
         return ScoredIncident(
@@ -308,11 +406,21 @@ class DeterministicScorer:
             breakdown=breakdown
         )
     
+    def _effective_threshold(self, context: InterpretedContext, override: Optional[int] = None) -> int:
+        """Return the score threshold to apply for this context."""
+        if override is not None:
+            return override
+        if not context.service_key:
+            # Lower the bar when service cannot be identified from the query
+            return max(FALLBACK_THRESHOLD, self.min_score_threshold - _NO_SERVICE_THRESHOLD_REDUCTION)
+        return self.min_score_threshold
+
     def score_and_rank(
         self,
         context: InterpretedContext,
         candidates: List[Dict[str, Any]],
-        top_k: int = 3
+        top_k: int = 3,
+        override_threshold: Optional[int] = None
     ) -> List[ScoredIncident]:
         """
         Score and rank all candidate incidents.
@@ -321,17 +429,19 @@ class DeterministicScorer:
             context: Interpreted context
             candidates: List of candidate incidents
             top_k: Number of top results to return
+            override_threshold: Explicit threshold override (e.g. for fallback pass)
             
         Returns:
-            Top K scored incidents, sorted by score descending
+            Top K scored incidents above threshold, sorted by score descending
         """
-        logger.info(f"Scoring {len(candidates)} candidates")
+        threshold = self._effective_threshold(context, override_threshold)
+        logger.info(f"Scoring {len(candidates)} candidates (threshold={threshold})")
         
         # Score all candidates
         scored = [self.score_incident(context, incident) for incident in candidates]
         
-        # Filter by minimum threshold
-        scored = [s for s in scored if s.score >= self.min_score_threshold]
+        # Filter by effective threshold
+        scored = [s for s in scored if s.score >= threshold]
         
         # Sort by score descending
         scored.sort(key=lambda x: x.score, reverse=True)
@@ -342,3 +452,26 @@ class DeterministicScorer:
         logger.info(f"Top {len(top_results)} matches: {[(s.incident_id, s.score) for s in top_results]}")
         
         return top_results
+
+    def get_fallback_matches(
+        self,
+        context: InterpretedContext,
+        candidates: List[Dict[str, Any]],
+        top_k: int = 3
+    ) -> List[ScoredIncident]:
+        """
+        Return top-K low-confidence matches using FALLBACK_THRESHOLD.
+
+        Called only when score_and_rank returns empty, to surface
+        possible-but-uncertain candidates rather than a hard empty response.
+
+        Args:
+            context: Interpreted context
+            candidates: Full candidate list
+            top_k: Number of candidates to surface
+
+        Returns:
+            Top K scored incidents above FALLBACK_THRESHOLD, may be empty
+        """
+        logger.info("Running fallback match pass")
+        return self.score_and_rank(context, candidates, top_k=top_k, override_threshold=FALLBACK_THRESHOLD)

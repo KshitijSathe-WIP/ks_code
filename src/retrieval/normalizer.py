@@ -73,6 +73,18 @@ SYMPTOM_SYNONYMS = {
     
     "crash": ["failure", "outage", "exception", "error"],
     "crashing": ["failure", "outage", "exception", "error"],
+
+    # SSL / TLS / Certificate
+    "ssl": ["ssl_handshake_failed", "certificate_error"],
+    "ssl certificate": ["ssl_handshake_failed", "certificate_expiry", "ssl_certificate"],
+    "tls": ["ssl_handshake_failed", "certificate_error"],
+    "certificate": ["certificate_expiry", "ssl_certificate"],
+    "expired": ["certificate_expiry"],
+    "handshake failed": ["ssl_handshake_failed"],
+
+    # Network / gateway
+    "connection refused": ["service_unavailable", "network_error"],
+    "502": ["gateway_error", "service_unavailable"],
 }
 
 
