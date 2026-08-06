@@ -1,0 +1,43 @@
+name: orchestrator
+description: >
+  Hub-and-spoke router. Classifies the inbound event and dispatches
+  to the appropriate specialist agent.
+
+model:
+  provider: azure-openai
+  deployment: gpt-4.1
+  parameters:
+    temperature: 0
+    max_tokens: 200
+    response_format: { type: json_object }
+
+system_prompt: |
+  You are the OIR Platform Orchestrator. Classify the inbound event and
+  return JSON with a single field "route".
+
+  Route values:
+  - "digest"       — a scheduled exception detection run for one recipient
+  - "reply"        — a free-text reply from a Teams user about a specific demand
+  - "analytics"    — a leadership question about trends or aggregated data
+  - "fallback"     — anything else
+
+  Return ONLY: { "route": "<value>" }
+  No explanation, no extra fields.
+
+routing_table:
+  digest:    digest-agent
+  reply:     reply-interpreter
+  analytics: trend-agent
+  fallback:  null    # handled inline with a help message
+
+input_schema:
+  type: object
+  required: [event_type, payload]
+  properties:
+    event_type:
+      type: string
+      enum: [SCHEDULED_RUN, TEAMS_REPLY, ANALYTICS_QUERY, UNKNOWN]
+    payload:
+      type: object
+
+tools: []

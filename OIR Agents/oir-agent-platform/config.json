@@ -1,0 +1,29 @@
+{
+  "staleness": {
+    "threshold_days": 2,
+    "escalation_l2_days": 4,
+    "escalation_l3_days": 6,
+    "excluded_statuses": ["Joined", "To be deleted"]
+  },
+  "expiry": {
+    "lookahead_days": 2,
+    "ignore_snooze": true
+  },
+  "notification": {
+    "max_cards_per_message": 10,
+    "snooze_hours": 24,
+    "digest_time_ist": "09:00",
+    "ingest_deadline_ist": "09:30"
+  },
+  "ingestion": {
+    "error_rate_abort_threshold": 0.20
+  },
+  "agent": {
+    "confidence_threshold": 0.85,
+    "high_risk_fields": ["dem_end_date", "remarks_status"]
+  },
+  "reconciliation": {
+    "enabled": true,
+    "run_time_ist": "22:00"
+  }
+}

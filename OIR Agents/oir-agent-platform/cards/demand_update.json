@@ -1,0 +1,78 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "${project} — ${demandId}",
+      "weight": "Bolder",
+      "size": "Medium",
+      "wrap": true
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "Role",         "value": "${role}" },
+        { "title": "Status",       "value": "${status}" },
+        { "title": "End Date",     "value": "${demEndDate}" },
+        { "title": "Last Updated", "value": "${lastContentChangeDate}" },
+        { "title": "Stale Days",   "value": "${staleDays}" }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "${alertText}",
+      "color": "Attention",
+      "wrap": true,
+      "$when": "${alertText != ''}"
+    },
+    {
+      "type": "Input.ChoiceSet",
+      "id": "remarks_status",
+      "label": "Remarks Status",
+      "value": "${status}",
+      "choices": [
+        { "title": "Need Profiles",  "value": "Need Profiles" },
+        { "title": "L1 in Progress", "value": "L1 in Progress" },
+        { "title": "Pending CI FB",  "value": "Pending CI FB" },
+        { "title": "Pending CI L2",  "value": "Pending CI L2" },
+        { "title": "Pending Offer",  "value": "Pending Offer" },
+        { "title": "Pending Joiner", "value": "Pending Joiner" },
+        { "title": "Joined",         "value": "Joined" },
+        { "title": "Project",        "value": "Project" },
+        { "title": "To be deleted",  "value": "To be deleted" }
+      ]
+    },
+    {
+      "type": "Input.Text",
+      "id": "comments",
+      "label": "Comments",
+      "isMultiline": true,
+      "placeholder": "What changed since the last update?"
+    },
+    {
+      "type": "Input.Date",
+      "id": "dem_end_date",
+      "label": "Revised End Date (optional)"
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Submit",
+      "title": "Submit Update",
+      "data": { "action": "SUBMIT", "demandId": "${demandId}" }
+    },
+    {
+      "type": "Action.Submit",
+      "title": "No Change",
+      "style": "destructive",
+      "data": { "action": "NO_CHANGE", "demandId": "${demandId}" }
+    },
+    {
+      "type": "Action.Submit",
+      "title": "Snooze 24h",
+      "data": { "action": "SNOOZE", "demandId": "${demandId}" }
+    }
+  ]
+}

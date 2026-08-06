@@ -1,0 +1,71 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Validate_filename": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "contains": [
+                "@triggerBody()?['name']",
+                "TD Bank OIR"
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "Call_IngestOIR_Function": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('IngestOIRFunctionUrl')",
+              "headers": {
+                "x-functions-key": "@parameters('IngestOIRFunctionKey')",
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "fileUrl": "@triggerBody()?['webUrl']",
+                "fileName": "@triggerBody()?['name']",
+                "fileDate": "@formatDateTime(utcNow(), 'yyyy-MM-dd')",
+                "lastModifiedBy": "@triggerBody()?['lastModifiedBy']?['user']?['email']"
+              }
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Log_rejected_file": {
+              "type": "Compose",
+              "inputs": "Rejected file: @{triggerBody()?['name']} — does not match OIR naming pattern."
+            }
+          }
+        }
+      }
+    },
+    "triggers": {
+      "When_a_file_is_created_in_SharePoint": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('SharePointSiteUrl')))}/tables/@{encodeURIComponent(encodeURIComponent(parameters('SharePointLibraryId')))}/onnewitems"
+        },
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 15
+        }
+      }
+    },
+    "parameters": {
+      "SharePointSiteUrl":       { "type": "string" },
+      "SharePointLibraryId":     { "type": "string" },
+      "IngestOIRFunctionUrl":    { "type": "string" },
+      "IngestOIRFunctionKey":    { "type": "securestring" }
+    }
+  }
+}

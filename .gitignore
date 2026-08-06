@@ -11,3 +11,5 @@ temp/
 
 STTM Lineage/Output Files/transformation_details.json
 STTM Lineage/Output Files/sample_lineage.json
+
+OIR Agents/oir-agent-platform/agents/.deployed_agents.json

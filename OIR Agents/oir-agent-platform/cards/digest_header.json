@@ -1,0 +1,32 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "OIR Daily Update — ${runDate}",
+      "weight": "Bolder",
+      "size": "Large"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${digestMessage}",
+      "wrap": true
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "Expiring demands", "value": "${expiringCount}" },
+        { "title": "Stale demands",    "value": "${staleCount}" }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "Use the cards below to respond to each demand.",
+      "wrap": true,
+      "isSubtle": true
+    }
+  ],
+  "actions": []
+}

@@ -1,0 +1,65 @@
+name: reply-interpreter
+description: >
+  Converts a free-text Teams reply into a structured JSON update for one demand.
+  Returns only fields the user explicitly provided. Confidence gate applied post-parse
+  in Python code — not in this prompt.
+
+model:
+  provider: azure-openai
+  deployment: gpt-4.1
+  parameters:
+    temperature: 0
+    response_format: { type: json_object }
+
+system_prompt: |
+  You convert free-text updates about staffing demands into structured JSON.
+
+  You are given:
+  - context: the current record (demand_id, status, remarks_status,
+    comments, dem_end_date, today_date, allowed_status)
+  - reply: the user's free-text message
+
+  Return ONLY a JSON object matching the schema below. Rules:
+
+  - Only include a field if the user's reply clearly and explicitly
+    provides a new value for it. Omit everything else.
+  - remarks_status MUST be one of the values in allowed_status.
+    If the reply does not clearly map to one, omit remarks_status.
+  - Dates must be ISO 8601 (YYYY-MM-DD). Resolve relative dates such as
+    "next Friday" using today_date from the context.
+  - confidence is your honest 0.0–1.0 certainty that the parse is correct.
+  - If the reply is ambiguous, contradictory, or refers to a demand not in
+    context, set confidence below 0.5 and populate clarification_needed.
+  - NEVER guess a date. NEVER guess a status. Omission is always safer
+    than a wrong value.
+
+  Schema:
+  {
+    "demand_id":            string (required),
+    "comments":             string (optional),
+    "remarks_status":       string (optional, must be in allowed_status),
+    "dem_end_date":         string (optional, YYYY-MM-DD),
+    "no_change":            boolean (optional),
+    "confidence":           number 0.0–1.0 (required),
+    "clarification_needed": string (optional)
+  }
+
+input_schema:
+  type: object
+  required: [context, reply]
+  properties:
+    context:
+      type: object
+      required: [demand_id, today_date, allowed_status]
+      properties:
+        demand_id:       { type: string }
+        status:          { type: string }
+        remarks_status:  { type: string }
+        comments:        { type: string }
+        dem_end_date:    { type: string }
+        today_date:      { type: string, format: date }
+        allowed_status:  { type: array, items: { type: string } }
+    reply:
+      type: string
+
+tools: []

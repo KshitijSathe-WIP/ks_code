@@ -1,0 +1,85 @@
+{
+  "tables": [
+    {
+      "name": "oir_demand",
+      "description": "Current master record — one row per demand, upserted on each ingestion.",
+      "columns": [
+        { "name": "oir_demandid",                 "type": "string",   "isPrimaryKey": true, "isRequired": true },
+        { "name": "oir_project",                  "type": "string" },
+        { "name": "oir_sldu",                     "type": "string" },
+        { "name": "oir_role",                     "type": "string" },
+        { "name": "oir_skill",                    "type": "string" },
+        { "name": "oir_status",                   "type": "picklist", "options": ["Need Profiles","L1 in Progress","Pending CI FB","Pending CI L2","Pending Offer","Pending Joiner","Joined","Project","To be deleted"] },
+        { "name": "oir_pm_name",                  "type": "string" },
+        { "name": "oir_pm_email",                 "type": "string" },
+        { "name": "oir_tm_name",                  "type": "string" },
+        { "name": "oir_tm_email",                 "type": "string" },
+        { "name": "oir_em_name",                  "type": "string" },
+        { "name": "oir_em_email",                 "type": "string" },
+        { "name": "oir_dm_email",                 "type": "string" },
+        { "name": "oir_dem_start_date",           "type": "date" },
+        { "name": "oir_dem_end_date",             "type": "date",    "isIndexed": true },
+        { "name": "oir_comments",                 "type": "multilinetext" },
+        { "name": "oir_remarks_status",           "type": "string" },
+        { "name": "oir_comments_hash",            "type": "string",   "maxLength": 64 },
+        { "name": "oir_last_content_change_date", "type": "date",    "isIndexed": true },
+        { "name": "oir_stale_days",               "type": "int",     "isComputed": true, "formula": "DATEDIFF(TODAY, oir_last_content_change_date, DAY)" },
+        { "name": "oir_last_notified_on",         "type": "datetime" },
+        { "name": "oir_escalation_level",         "type": "int",     "default": 0 },
+        { "name": "oir_snooze_until",             "type": "datetime" },
+        { "name": "oir_source_file",              "type": "string" },
+        { "name": "oir_first_seen_date",          "type": "date" },
+        { "name": "oir_is_active",                "type": "boolean", "default": true, "isIndexed": true }
+      ],
+      "indexes": ["oir_demandid", "oir_pm_email", "oir_tm_email", "oir_last_content_change_date", "oir_dem_end_date", "oir_is_active"]
+    },
+    {
+      "name": "oir_snapshot_history",
+      "description": "Append-only daily snapshot — never updated, never deleted.",
+      "columns": [
+        { "name": "oir_snapshotid",    "type": "guid",     "isPrimaryKey": true },
+        { "name": "oir_demandid",      "type": "string",   "isIndexed": true },
+        { "name": "oir_snapshot_date", "type": "date",     "isIndexed": true },
+        { "name": "oir_status",        "type": "string" },
+        { "name": "oir_comments",      "type": "multilinetext" },
+        { "name": "oir_remarks_status","type": "string" },
+        { "name": "oir_comments_hash", "type": "string",   "maxLength": 64 },
+        { "name": "oir_dem_end_date",  "type": "date" },
+        { "name": "oir_pm_email",      "type": "string" },
+        { "name": "oir_tm_email",      "type": "string" },
+        { "name": "oir_source_file",   "type": "string" },
+        { "name": "oir_ingested_at",   "type": "datetime" }
+      ],
+      "uniqueConstraints": [["oir_demandid", "oir_snapshot_date"]]
+    },
+    {
+      "name": "oir_interaction_log",
+      "description": "Audit trail — append-only. Records every notification, reply, and action.",
+      "columns": [
+        { "name": "oir_interactionid",   "type": "guid",     "isPrimaryKey": true },
+        { "name": "oir_demandid",        "type": "string",   "isIndexed": true },
+        { "name": "oir_event_type",      "type": "picklist", "options": ["NOTIFIED","REPLIED","NO_CHANGE","SNOOZED","ESCALATED","AUTO_UPDATED","REJECTED"] },
+        { "name": "oir_recipient_email", "type": "string" },
+        { "name": "oir_actor_email",     "type": "string" },
+        { "name": "oir_channel",         "type": "string",   "default": "TEAMS" },
+        { "name": "oir_rule_triggered",  "type": "string" },
+        { "name": "oir_message_sent",    "type": "multilinetext" },
+        { "name": "oir_reply_raw",       "type": "multilinetext" },
+        { "name": "oir_reply_parsed",    "type": "multilinetext" },
+        { "name": "oir_confidence",      "type": "decimal" },
+        { "name": "oir_field_changed",   "type": "string" },
+        { "name": "oir_value_before",    "type": "multilinetext" },
+        { "name": "oir_value_after",     "type": "multilinetext" },
+        { "name": "oir_created_at",      "type": "datetime", "isIndexed": true }
+      ]
+    },
+    {
+      "name": "oir_person_map",
+      "description": "Cache of display_name → email resolutions from Microsoft Graph.",
+      "columns": [
+        { "name": "oir_display_name", "type": "string", "isPrimaryKey": true },
+        { "name": "oir_email",        "type": "string" }
+      ]
+    }
+  ]
+}

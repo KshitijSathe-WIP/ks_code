@@ -1,0 +1,51 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "⚠️ Please confirm this change",
+      "weight": "Bolder",
+      "size": "Medium",
+      "color": "Attention"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Demand: **${demandId}** — ${project}",
+      "wrap": true
+    },
+    {
+      "type": "FactSet",
+      "facts": [
+        { "title": "Field",     "value": "${fieldName}" },
+        { "title": "Current",   "value": "${valueBefore}" },
+        { "title": "Proposed",  "value": "${valueAfter}" }
+      ]
+    },
+    {
+      "type": "TextBlock",
+      "text": "This is a high-risk field change. Please confirm before it is applied.",
+      "wrap": true,
+      "isSubtle": true
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Submit",
+      "title": "Confirm & Apply",
+      "style": "positive",
+      "data": {
+        "action": "CONFIRM_APPLY",
+        "demandId": "${demandId}",
+        "fieldName": "${fieldName}",
+        "valueAfter": "${valueAfter}"
+      }
+    },
+    {
+      "type": "Action.Submit",
+      "title": "Cancel",
+      "data": { "action": "CONFIRM_CANCEL", "demandId": "${demandId}" }
+    }
+  ]
+}
