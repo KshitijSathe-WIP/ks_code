@@ -1,8 +1,9 @@
 """Azure Function: IngestOIR
 
 HTTP-triggered (called by Logic App on SharePoint file-created event).
-Parses the OIR Excel file, hashes content, upserts Dataverse, and appends
-a snapshot row for every demand. Designed to be fully idempotent.
+Parses the OIR Excel file, hashes content, upserts the OIR Demands
+SharePoint list, and appends a snapshot row for every demand. Designed to
+be fully idempotent.
 
 Expected request body:
 {
@@ -27,10 +28,10 @@ from azure.identity import ClientSecretCredential
 
 from functions.shared.models import CONFIG, IngestionError
 from functions.shared.graph_client import GraphClient
+from functions.shared.sharepoint_client import SharePointListsClient
 from functions.shared.telemetry import track_metric, track_event
 from .parser import parse_workbook
 from .hashing import content_hash
-from .dataverse_client import DataverseClient
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
 
     # -- Download file -------------------------------------------------------
     try:
-        token = _sharepoint_token()
+        token = _graph_token_for_file_download()
         with httpx.Client(timeout=60.0) as http:
             resp = http.get(file_url, headers={"Authorization": f"Bearer {token}"})
             resp.raise_for_status()
@@ -100,49 +101,49 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
         _alert_pmo(msg)
         return func.HttpResponse(msg, status_code=422)
 
-    # -- Upsert into Dataverse -----------------------------------------------
+    # -- Upsert into the OIR Demands SharePoint list --------------------------
     rows_processed = 0
     rows_changed = 0
     rows_errored = 0
     seen_ids: set[str] = set()
 
-    with DataverseClient() as dv, GraphClient() as graph:
+    with SharePointListsClient() as sp, GraphClient() as graph:
         for row in rows:
             seen_ids.add(row.demand_id)
             new_hash = content_hash(row.comments, row.remarks_status)
 
-            # Resolve owner emails via Graph (with Dataverse cache)
-            pm_email = _resolve_email(row.pm_name, graph, dv)
-            tm_email = _resolve_email(row.tm_name, graph, dv)
-            em_email = _resolve_email(row.em_name, graph, dv)
+            # Resolve owner emails via Graph (with SharePoint-list cache)
+            pm_email = _resolve_email(row.pm_name, graph, sp)
+            tm_email = _resolve_email(row.tm_name, graph, sp)
+            em_email = _resolve_email(row.em_name, graph, sp)
 
             try:
-                existing = dv.get_demand(row.demand_id)
+                existing = sp.get_demand(row.demand_id)
 
                 if existing is None:
-                    dv.upsert_demand({
-                        "oir_demandid": row.demand_id,
-                        "oir_project": row.project,
-                        "oir_sldu": row.sldu,
-                        "oir_role": row.role,
-                        "oir_skill": row.skill,
-                        "oir_status": row.status,
-                        "oir_pm_name": row.pm_name,
-                        "oir_pm_email": pm_email or "",
-                        "oir_tm_name": row.tm_name,
-                        "oir_tm_email": tm_email or "",
-                        "oir_em_name": row.em_name,
-                        "oir_em_email": em_email or "",
-                        "oir_dem_start_date": row.dem_start_date.isoformat() if row.dem_start_date else None,
-                        "oir_dem_end_date": row.dem_end_date.isoformat() if row.dem_end_date else None,
-                        "oir_comments": row.comments,
-                        "oir_remarks_status": row.remarks_status,
-                        "oir_comments_hash": new_hash,
-                        "oir_last_content_change_date": file_date.isoformat(),
-                        "oir_first_seen_date": file_date.isoformat(),
-                        "oir_escalation_level": 0,
-                        "oir_is_active": True,
-                        "oir_source_file": row.source_file,
+                    sp.upsert_demand({
+                        "DemandID": row.demand_id,
+                        "Project": row.project,
+                        "SLDU": row.sldu,
+                        "Role": row.role,
+                        "Skill": row.skill,
+                        "Status": row.status,
+                        "PMName": row.pm_name,
+                        "PMEmail": pm_email or "",
+                        "TMName": row.tm_name,
+                        "TMEmail": tm_email or "",
+                        "EMName": row.em_name,
+                        "EMEmail": em_email or "",
+                        "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
+                        "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                        "Comments": row.comments,
+                        "RemarksStatus": row.remarks_status,
+                        "CommentsHash": new_hash,
+                        "LastContentChangeDate": file_date.isoformat(),
+                        "FirstSeenDate": file_date.isoformat(),
+                        "EscalationLevel": 0,
+                        "IsActive": True,
+                        "SourceFile": row.source_file,
                     })
                     rows_changed += 1
                 else:
@@ -150,38 +151,50 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
                     if content_changed:
                         rows_changed += 1
 
-                    dv.upsert_demand({
-                        "oir_demandid": row.demand_id,
-                        "oir_project": row.project,
-                        "oir_sldu": row.sldu,
-                        "oir_role": row.role,
-                        "oir_skill": row.skill,
-                        "oir_status": row.status,
-                        "oir_pm_name": row.pm_name,
-                        "oir_pm_email": pm_email or existing.pm_email,
-                        "oir_tm_name": row.tm_name,
-                        "oir_tm_email": tm_email or existing.tm_email,
-                        "oir_em_name": row.em_name,
-                        "oir_em_email": em_email or existing.em_email,
-                        "oir_dem_start_date": row.dem_start_date.isoformat() if row.dem_start_date else None,
-                        "oir_dem_end_date": row.dem_end_date.isoformat() if row.dem_end_date else None,
-                        "oir_comments": row.comments,
-                        "oir_remarks_status": row.remarks_status,
-                        "oir_comments_hash": new_hash,
-                        "oir_last_content_change_date": (
+                    sp.upsert_demand({
+                        "DemandID": row.demand_id,
+                        "Project": row.project,
+                        "SLDU": row.sldu,
+                        "Role": row.role,
+                        "Skill": row.skill,
+                        "Status": row.status,
+                        "PMName": row.pm_name,
+                        "PMEmail": pm_email or existing.pm_email,
+                        "TMName": row.tm_name,
+                        "TMEmail": tm_email or existing.tm_email,
+                        "EMName": row.em_name,
+                        "EMEmail": em_email or existing.em_email,
+                        "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
+                        "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                        "Comments": row.comments,
+                        "RemarksStatus": row.remarks_status,
+                        "CommentsHash": new_hash,
+                        "LastContentChangeDate": (
                             file_date.isoformat() if content_changed
                             else existing.last_content_change_date.isoformat()
                         ),
-                        "oir_escalation_level": 0 if content_changed else existing.escalation_level,
-                        "oir_last_notified_on": None if content_changed else (
+                        "EscalationLevel": 0 if content_changed else existing.escalation_level,
+                        "LastNotifiedOn": None if content_changed else (
                             existing.last_notified_on.isoformat() + "Z"
                             if existing.last_notified_on else None
                         ),
-                        "oir_is_active": True,
-                        "oir_source_file": row.source_file,
+                        "IsActive": True,
+                        "SourceFile": row.source_file,
                     })
 
-                dv.insert_snapshot(row, new_hash, snapshot_date=file_date)
+                sp.insert_snapshot({
+                    "DemandID": row.demand_id,
+                    "SnapshotDate": file_date.isoformat(),
+                    "Status": row.status,
+                    "Comments": row.comments,
+                    "RemarksStatus": row.remarks_status,
+                    "CommentsHash": new_hash,
+                    "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                    "PMEmail": pm_email or "",
+                    "TMEmail": tm_email or "",
+                    "SourceFile": row.source_file,
+                    "IngestedAt": datetime.utcnow().isoformat() + "Z",
+                })
                 rows_processed += 1
 
             except Exception as exc:
@@ -196,7 +209,7 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
                     _alert_pmo(msg)
                     return func.HttpResponse(msg, status_code=500)
 
-        dv.deactivate_missing(file_date, seen_ids)
+        sp.deactivate_missing(seen_ids)
 
     duration_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
     track_metric("ingest.rows_processed", rows_processed, {"file_date": file_date_str})
@@ -222,19 +235,25 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_email(display_name: str, graph: GraphClient, dv: DataverseClient) -> str | None:
+def _resolve_email(display_name: str, graph: GraphClient, sp: SharePointListsClient) -> str | None:
     if not display_name:
         return None
-    cached = dv.get_cached_email(display_name)
+    cached = sp.get_cached_email(display_name)
     if cached:
         return cached
     email = graph.resolve_email(display_name)
     if email:
-        dv.cache_email(display_name, email)
+        sp.cache_email(display_name, email)
     return email
 
 
-def _sharepoint_token() -> str:
+def _graph_token_for_file_download() -> str:
+    """Token to download the source .xlsx from its SharePoint document library.
+
+    Distinct from SharePointListsClient's own token acquisition -- this one
+    is scoped just to the file download step, before the workbook has even
+    been parsed.
+    """
     credential = ClientSecretCredential(
         tenant_id=os.environ["AZURE_TENANT_ID"],
         client_id=os.environ["AZURE_CLIENT_ID"],

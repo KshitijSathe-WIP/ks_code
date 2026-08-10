@@ -9,7 +9,7 @@ def set_env_vars(monkeypatch):
     monkeypatch.setenv("AZURE_TENANT_ID", "test-tenant")
     monkeypatch.setenv("AZURE_CLIENT_ID", "test-client")
     monkeypatch.setenv("AZURE_CLIENT_SECRET", "test-secret")
-    monkeypatch.setenv("DATAVERSE_URL", "https://test.crm.dynamics.com")
+    monkeypatch.setenv("SHAREPOINT_SITE_URL", "https://test.sharepoint.com/sites/OIR")
     monkeypatch.setenv("APPINSIGHTS_INSTRUMENTATIONKEY", "")
     monkeypatch.setenv("PMO_TEAMS_WEBHOOK_URL", "")
     monkeypatch.setenv("SHADOW_MODE", "true")

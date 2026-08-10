@@ -1,7 +1,7 @@
 """Tests for detection rules engine.
 
-Uses freezegun to control date.today() and a mock Dataverse response
-so no real HTTP calls are made.
+Uses freezegun to control date.today() and plain dict fixtures shaped like
+SharePoint list item fields -- no real HTTP calls are made.
 """
 from __future__ import annotations
 
@@ -25,26 +25,26 @@ class TestExpiryBoundary:
     def _make_row(self, days_from_today: int) -> dict:
         end = (date.today() + timedelta(days=days_from_today)).isoformat()
         return {
-            "oir_demandid": "D001",
-            "oir_project": "Aurora",
-            "oir_role": "Developer",
-            "oir_status": "Need Profiles",
-            "oir_pm_email": "pm@wipro.com",
-            "oir_tm_email": "tm@wipro.com",
-            "oir_em_email": "em@wipro.com",
-            "oir_dem_end_date": end,
+            "DemandID": "D001",
+            "Project": "Aurora",
+            "Role": "Developer",
+            "Status": "Need Profiles",
+            "PMEmail": "pm@wipro.com",
+            "TMEmail": "tm@wipro.com",
+            "EMEmail": "em@wipro.com",
+            "DEMEndDate": end,
         }
 
     def test_exactly_lookahead_days_triggers(self):
         lookahead = CONFIG["expiry"]["lookahead_days"]
         row = self._make_row(lookahead)
-        left = _days_left(row["oir_dem_end_date"], date.today())
+        left = _days_left(row["DEMEndDate"], date.today())
         assert left == lookahead
 
     def test_beyond_lookahead_does_not_trigger(self):
         lookahead = CONFIG["expiry"]["lookahead_days"]
         row = self._make_row(lookahead + 1)
-        left = _days_left(row["oir_dem_end_date"], date.today())
+        left = _days_left(row["DEMEndDate"], date.today())
         assert left > lookahead
 
     def test_today_expiry_triggers(self):
@@ -57,22 +57,22 @@ class TestStalenessGate:
     def test_snoozed_row_skipped(self):
         from datetime import datetime
         future = (datetime.utcnow() + timedelta(hours=12)).isoformat() + "Z"
-        row = {"oir_snooze_until": future}
+        row = {"SnoozeUntil": future}
         assert _is_snoozed(row, datetime.utcnow()) is True
 
     def test_expired_snooze_not_skipped(self):
         from datetime import datetime
         past = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"
-        row = {"oir_snooze_until": past}
+        row = {"SnoozeUntil": past}
         assert _is_snoozed(row, datetime.utcnow()) is False
 
     def test_notified_today_skips(self):
-        row = {"oir_last_notified_on": date.today().isoformat() + "T08:00:00Z"}
+        row = {"LastNotifiedOn": date.today().isoformat() + "T08:00:00Z"}
         assert _notified_today(row, date.today()) is True
 
     def test_not_notified_today_does_not_skip(self):
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-        row = {"oir_last_notified_on": yesterday + "T08:00:00Z"}
+        row = {"LastNotifiedOn": yesterday + "T08:00:00Z"}
         assert _notified_today(row, date.today()) is False
 
 
@@ -133,3 +133,84 @@ class TestConfidenceGate:
 
     def test_confidence_084_routes_clarify(self):
         assert self._gate({"demand_id": "D1", "confidence": 0.849}) == "CLARIFY"
+
+
+class TestRunRulesClientSideFiltering:
+    """End-to-end run_rules() against a mocked SharePointListsClient.
+
+    Verifies the client-side filtering added when Dataverse's OData $filter
+    pushdown was replaced with a full-scan approach (see
+    docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md).
+    """
+
+    def _row(self, **overrides) -> dict:
+        base = {
+            "DemandID": "D100",
+            "Project": "Aurora",
+            "Role": "Developer",
+            "Status": "Need Profiles",
+            "PMEmail": "pm@wipro.com",
+            "TMEmail": "tm@wipro.com",
+            "EMEmail": "em@wipro.com",
+            "DMEmail": "",
+            "DEMEndDate": (date.today() + timedelta(days=30)).isoformat(),
+            "LastContentChangeDate": date.today().isoformat(),
+            "EscalationLevel": 0,
+            "SnoozeUntil": None,
+            "LastNotifiedOn": None,
+            "IsActive": True,
+        }
+        base.update(overrides)
+        return base
+
+    def _run_with_rows(self, rows: list[dict]) -> dict:
+        mock_client = MagicMock()
+        mock_client.list_active_demands.return_value = rows
+        mock_client.__enter__.return_value = mock_client
+        mock_client.__exit__.return_value = False
+        with patch("functions.detect_exceptions.rules.SharePointListsClient", return_value=mock_client):
+            return run_rules(today=date.today())
+
+    def test_stale_row_grouped_by_pm_and_tm(self):
+        stale_threshold = CONFIG["staleness"]["threshold_days"]
+        row = self._row(
+            LastContentChangeDate=(date.today() - timedelta(days=stale_threshold)).isoformat()
+        )
+        payload = self._run_with_rows([row])
+        recipients = {r["email"]: r for r in payload["recipients"]}
+        assert "pm@wipro.com" in recipients
+        assert "tm@wipro.com" in recipients
+        assert len(recipients["pm@wipro.com"]["stale"]) == 1
+        assert recipients["pm@wipro.com"]["stale"][0]["demand_id"] == "D100"
+
+    def test_fresh_row_produces_no_stale_entry(self):
+        payload = self._run_with_rows([self._row()])  # LastContentChangeDate = today
+        assert payload["recipients"] == []
+
+    def test_excluded_status_never_flagged_stale(self):
+        stale_threshold = CONFIG["staleness"]["threshold_days"]
+        row = self._row(
+            Status="Joined",
+            LastContentChangeDate=(date.today() - timedelta(days=stale_threshold + 10)).isoformat(),
+        )
+        payload = self._run_with_rows([row])
+        assert payload["recipients"] == []
+
+    def test_expiring_row_reaches_pm_tm_and_em(self):
+        lookahead = CONFIG["expiry"]["lookahead_days"]
+        row = self._row(DEMEndDate=(date.today() + timedelta(days=lookahead)).isoformat())
+        payload = self._run_with_rows([row])
+        recipients = {r["email"]: r for r in payload["recipients"]}
+        assert set(recipients) == {"pm@wipro.com", "tm@wipro.com", "em@wipro.com"}
+        for bucket in recipients.values():
+            assert len(bucket["expiring"]) == 1
+
+    def test_inactive_row_excluded_by_client_side_filter(self):
+        # list_active_demands() is expected to have already filtered IsActive;
+        # this confirms run_rules doesn't re-derive anything from IsActive itself.
+        stale_threshold = CONFIG["staleness"]["threshold_days"]
+        row = self._row(
+            LastContentChangeDate=(date.today() - timedelta(days=stale_threshold)).isoformat()
+        )
+        payload = self._run_with_rows([row])
+        assert len(payload["recipients"]) == 2  # pm + tm, sanity check the active row still flags

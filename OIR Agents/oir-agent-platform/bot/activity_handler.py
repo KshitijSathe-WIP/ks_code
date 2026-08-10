@@ -23,6 +23,7 @@ from botbuilder.schema import Activity, ActivityTypes
 
 from functions.shared.models import CONFIG, VALID_STATUSES
 from functions.shared import foundry_client
+from functions.shared.sharepoint_client import SharePointListsClient
 from functions.detect_exceptions.rules import _gate
 
 logger = logging.getLogger(__name__)
@@ -183,42 +184,23 @@ def _extract_demand_id(text: str) -> str | None:
 
 
 def _build_context(demand_id: str) -> dict | None:
-    """Fetch the current demand record from ApplyUpdate's Dataverse backing."""
-    # In the full system this calls the Dataverse client directly.
-    # Stubbed here to keep the bot decoupled from DV imports at startup.
-    dv_base = os.environ.get("DATAVERSE_URL", "").rstrip("/") + "/api/data/v9.2"
-    if not dv_base.startswith("http"):
+    """Fetch the current demand record from the OIR Demands SharePoint list."""
+    if not os.environ.get("SHAREPOINT_SITE_URL", "").startswith("http"):
         return None
     try:
-        from azure.identity import ClientSecretCredential
-        dv_host = os.environ["DATAVERSE_URL"].rstrip("/").removeprefix("https://")
-        cred = ClientSecretCredential(
-            tenant_id=os.environ["AZURE_TENANT_ID"],
-            client_id=os.environ["AZURE_CLIENT_ID"],
-            client_secret=os.environ["AZURE_CLIENT_SECRET"],
-        )
-        token = cred.get_token(f"https://{dv_host}/.default").token
-        with httpx.Client(timeout=10.0) as http:
-            resp = http.get(
-                f"{dv_base}/oir_demands",
-                headers={"Authorization": f"Bearer {token}", "Accept": "application/json",
-                         "OData-MaxVersion": "4.0", "OData-Version": "4.0"},
-                params={"$filter": f"oir_demandid eq '{demand_id.replace(chr(39), chr(39)*2)}'", "$top": "1"},
-            )
-            resp.raise_for_status()
-            items = resp.json().get("value", [])
-            if not items:
-                return None
-            r = items[0]
-            return {
-                "demand_id": demand_id,
-                "status": r.get("oir_status", ""),
-                "remarks_status": r.get("oir_remarks_status", ""),
-                "comments": r.get("oir_comments", ""),
-                "dem_end_date": (r.get("oir_dem_end_date") or "")[:10],
-                "today_date": date.today().isoformat(),
-                "allowed_status": sorted(VALID_STATUSES),
-            }
+        with SharePointListsClient() as sp:
+            demand = sp.get_demand(demand_id)
+        if demand is None:
+            return None
+        return {
+            "demand_id": demand_id,
+            "status": demand.status,
+            "remarks_status": demand.remarks_status,
+            "comments": demand.comments,
+            "dem_end_date": demand.dem_end_date.isoformat() if demand.dem_end_date else "",
+            "today_date": date.today().isoformat(),
+            "allowed_status": sorted(VALID_STATUSES),
+        }
     except Exception as exc:
         logger.error("Failed to fetch context for %s: %s", demand_id, exc)
         return None

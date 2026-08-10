@@ -2,11 +2,11 @@
 .SYNOPSIS
     Deploys the OIR platform's Azure infrastructure (Key Vault, App Insights,
     Storage, Function App) from infra/main.bicep, and creates the service
-    principal used by the Functions to call Dataverse / Graph / Foundry.
+    principal used by the Functions to call SharePoint / Graph / Foundry.
 
 .DESCRIPTION
-    Wraps `az` CLI calls only - does not touch Dataverse or Foundry (see
-    provision_dataverse.py and deploy_agents.py for those). Safe to re-run:
+    Wraps `az` CLI calls only - does not touch SharePoint or Foundry (see
+    provision_sharepoint_lists.py and deploy_agents.py for those). Safe to re-run:
     resource group and deployment are idempotent; the service principal step
     is skipped if -SkipServicePrincipal is passed or one already exists with
     the given display name.
@@ -97,9 +97,9 @@ if (-not $SkipServicePrincipal) {
         # NOTE: this itself performs a role assignment (Microsoft.Authorization/roleAssignments/write),
         # so it needs Owner/User Access Administrator on $ResourceGroup -- same requirement as the
         # Key Vault RBAC grant above. If that's missing, fall back to an app registration with no
-        # role assignment: Dataverse/Graph access for this app is granted separately anyway (Dataverse
-        # Application User + API permissions), so Contributor on the RG is a convenience, not a hard
-        # requirement for the Functions to work once deployed.
+        # role assignment: SharePoint/Graph access for this app is granted separately anyway (Graph
+        # API application permissions with admin consent), so Contributor on the RG is a convenience,
+        # not a hard requirement for the Functions to work once deployed.
         try {
             $sp = az ad sp create-for-rbac `
                 --name $ServicePrincipalName `
@@ -124,11 +124,10 @@ if (-not $SkipServicePrincipal) {
         Write-Host "   AZURE_CLIENT_SECRET = $($sp.password)"
         Write-Host "=====================================================================" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "Next: register this app as an Application User in the Dataverse" -ForegroundColor Cyan
-        Write-Host "environment (Power Platform admin center) with a security role" -ForegroundColor Cyan
-        Write-Host "granting Create/Read/Write on the oir_* tables, then re-run" -ForegroundColor Cyan
-        Write-Host "provision_dataverse.py with these credentials." -ForegroundColor Cyan
+        Write-Host "Next: grant this app Sites.Selected (or Sites.ReadWrite.All) Graph API" -ForegroundColor Cyan
+        Write-Host "application permission with admin consent, and grant it write access to" -ForegroundColor Cyan
+        Write-Host "the target SharePoint site, then re-run provision_sharepoint_lists.py." -ForegroundColor Cyan
     }
 }
 
-Write-Host "==> Done. See docs/runbook.md for the remaining Dataverse/Foundry/Teams steps." -ForegroundColor Green
+Write-Host "==> Done. See docs/runbook.md for the remaining SharePoint/Foundry/Teams steps." -ForegroundColor Green

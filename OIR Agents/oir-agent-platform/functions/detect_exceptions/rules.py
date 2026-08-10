@@ -8,19 +8,22 @@ Three rules:
 
 Output is a dict keyed by recipient email with expiring and stale demand lists,
 ready to pass to the Digest Agent.
+
+Filtering happens client-side in Python against a full scan of active demand
+rows, rather than via server-side query pushdown -- see
+docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md for why (in
+short: SharePoint list filtering via Graph is unreliable on non-indexed
+columns, and at this project's scale a full scan is simpler and more robust).
 """
 from __future__ import annotations
 
 import logging
-import os
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-import httpx
-from azure.identity import ClientSecretCredential
-
 from functions.shared.models import CONFIG
+from functions.shared.sharepoint_client import SharePointListsClient
 
 logger = logging.getLogger(__name__)
 
@@ -29,45 +32,13 @@ _EXPIRY_CFG = CONFIG["expiry"]
 
 
 # ---------------------------------------------------------------------------
-# Data fetch helpers
-# ---------------------------------------------------------------------------
-
-def _token() -> str:
-    credential = ClientSecretCredential(
-        tenant_id=os.environ["AZURE_TENANT_ID"],
-        client_id=os.environ["AZURE_CLIENT_ID"],
-        client_secret=os.environ["AZURE_CLIENT_SECRET"],
-    )
-    dv_host = os.environ["DATAVERSE_URL"].rstrip("/").removeprefix("https://")
-    return credential.get_token(f"https://{dv_host}/.default").token
-
-
-def _headers() -> dict:
-    return {
-        "Authorization": f"Bearer {_token()}",
-        "OData-MaxVersion": "4.0",
-        "OData-Version": "4.0",
-        "Accept": "application/json",
-    }
-
-
-def _dv_get(path: str, params: dict | None = None) -> list[dict]:
-    base = os.environ["DATAVERSE_URL"].rstrip("/") + "/api/data/v9.2"
-    with httpx.Client(timeout=30.0) as http:
-        resp = http.get(f"{base}/{path}", headers=_headers(), params=params or {})
-        resp.raise_for_status()
-        return resp.json().get("value", [])
-
-
-# ---------------------------------------------------------------------------
 # Core rules
 # ---------------------------------------------------------------------------
 
 def run_rules(today: date | None = None) -> dict[str, Any]:
     """Execute all three rules and return a grouped-by-recipient payload."""
-    from datetime import timezone as _tz
     today = today or date.today()
-    now = datetime.now(_tz.utc)
+    now = datetime.now(timezone.utc)
 
     excluded = tuple(_STALENESS_CFG["excluded_statuses"])
     stale_threshold = _STALENESS_CFG["threshold_days"]
@@ -75,95 +46,60 @@ def run_rules(today: date | None = None) -> dict[str, Any]:
     l3_threshold = _STALENESS_CFG["escalation_l3_days"]
     lookahead = _EXPIRY_CFG["lookahead_days"]
 
-    # -----------------------------------------------------------------------
-    # Rule 1 + 3 — Stale demands (respects snooze and last-notified)
-    # Filter by last_content_change_date (persisted, filterable) instead of
-    # oir_stale_days (computed column — not filterable in Dataverse OData).
-    # -----------------------------------------------------------------------
-    stale_cutoff = (today - timedelta(days=stale_threshold)).isoformat()
-    excluded_filter = "".join(f"and oir_status ne '{s}' " for s in excluded)
-    stale_params = {
-        "$filter": (
-            f"oir_is_active eq true "
-            f"and oir_last_content_change_date le {stale_cutoff} "
-            + excluded_filter
-        ),
-        "$select": (
-            "oir_demandid,oir_project,oir_role,oir_status,"
-            "oir_pm_email,oir_tm_email,oir_em_email,"
-            "oir_dem_end_date,oir_last_content_change_date,oir_escalation_level,"
-            "oir_snooze_until,oir_last_notified_on"
-        ),
-    }
-    raw_stale = _dv_get("oir_demands", stale_params)
-    # Compute stale_days in code and attach to each row
-    stale_rows = []
-    for r in raw_stale:
-        lcd = r.get("oir_last_content_change_date", "")
-        try:
-            stale_days_val = (today - date.fromisoformat(lcd[:10])).days
-        except (ValueError, TypeError):
-            stale_days_val = stale_threshold
-        stale_rows.append({**r, "oir_stale_days": stale_days_val})
+    with SharePointListsClient() as sp:
+        active_rows = sp.list_active_demands()
 
-    # -----------------------------------------------------------------------
-    # Rule 2 — Expiring demands (snooze intentionally ignored per spec)
-    # -----------------------------------------------------------------------
-    expiry_end = (today + timedelta(days=lookahead)).isoformat()
-    expiry_params = {
-        "$filter": (
-            f"oir_is_active eq true "
-            f"and oir_dem_end_date ge {today.isoformat()} "
-            f"and oir_dem_end_date le {expiry_end} "
-            f"and oir_status ne 'Joined'"
-        ),
-        "$select": (
-            "oir_demandid,oir_project,oir_role,oir_status,"
-            "oir_pm_email,oir_tm_email,oir_em_email,oir_dem_end_date"
-        ),
-    }
-    expiry_rows = _dv_get("oir_demands", expiry_params)
-
-    # -----------------------------------------------------------------------
-    # Group by recipient
-    # -----------------------------------------------------------------------
     recipient_map: dict[str, dict] = defaultdict(lambda: {"expiring": [], "stale": []})
 
-    for row in expiry_rows:
-        item = {
-            "demand_id": row["oir_demandid"],
-            "project": row.get("oir_project", ""),
-            "role": row.get("oir_role", ""),
-            "dem_end_date": row.get("oir_dem_end_date", ""),
-            "days_left": _days_left(row.get("oir_dem_end_date"), today),
-            "status": row.get("oir_status", ""),
-            "rule": "EXPIRY_2D",
-        }
-        for email_key in ("oir_pm_email", "oir_tm_email", "oir_em_email"):
-            email = row.get(email_key, "")
-            if email:
-                recipient_map[email]["expiring"].append(item)
+    for row in active_rows:
+        status = row.get("Status", "")
 
-    for row in stale_rows:
+        # ---------------------------------------------------------------
+        # Rule 2 — Expiring (snooze intentionally ignored per spec)
+        # ---------------------------------------------------------------
+        if status != "Joined":
+            days_left = _days_left(row.get("DEMEndDate"), today)
+            if 0 <= days_left <= lookahead:
+                item = {
+                    "demand_id": row.get("DemandID", ""),
+                    "project": row.get("Project", ""),
+                    "role": row.get("Role", ""),
+                    "dem_end_date": row.get("DEMEndDate", ""),
+                    "days_left": days_left,
+                    "status": status,
+                    "rule": "EXPIRY_2D",
+                }
+                for email_field in ("PMEmail", "TMEmail", "EMEmail"):
+                    email = row.get(email_field, "")
+                    if email:
+                        recipient_map[email]["expiring"].append(item)
+
+        # ---------------------------------------------------------------
+        # Rule 1 + 3 — Stale (respects snooze and last-notified)
+        # ---------------------------------------------------------------
+        if status in excluded:
+            continue
         if _is_snoozed(row, now):
             continue
         if _notified_today(row, today):
             continue
 
-        stale_days = int(row.get("oir_stale_days", 0))
+        stale_days = _stale_days(row.get("LastContentChangeDate"), today, default=0)
+        if stale_days < stale_threshold:
+            continue
+
         rule_tag, recipients = _escalation_tier(stale_days, l2_threshold, l3_threshold)
         item = {
-            "demand_id": row["oir_demandid"],
-            "project": row.get("oir_project", ""),
-            "role": row.get("oir_role", ""),
+            "demand_id": row.get("DemandID", ""),
+            "project": row.get("Project", ""),
+            "role": row.get("Role", ""),
             "stale_days": stale_days,
-            "status": row.get("oir_status", ""),
-            "escalation_level": int(row.get("oir_escalation_level", 0)),
+            "status": status,
+            "escalation_level": int(row.get("EscalationLevel") or 0),
             "rule": rule_tag,
         }
 
-        email_fields = _recipient_fields(recipients)
-        for field in email_fields:
+        for field in _recipient_fields(recipients):
             email = row.get(field, "")
             if email:
                 recipient_map[email]["stale"].append(item)
@@ -202,22 +138,30 @@ def _days_left(dem_end_date_str: str | None, today: date) -> int:
         return 999
 
 
+def _stale_days(last_content_change_date_str: str | None, today: date, default: int) -> int:
+    if not last_content_change_date_str:
+        return default
+    try:
+        return (today - date.fromisoformat(last_content_change_date_str[:10])).days
+    except ValueError:
+        return default
+
+
 def _is_snoozed(row: dict, now: datetime) -> bool:
-    snooze = row.get("oir_snooze_until")
+    snooze = row.get("SnoozeUntil")
     if not snooze:
         return False
     try:
-        from datetime import timezone as _tz
         snooze_dt = datetime.fromisoformat(snooze.replace("Z", "+00:00"))
         # Compare in UTC; now must also be UTC-aware
-        now_utc = now.replace(tzinfo=_tz.utc) if now.tzinfo is None else now
+        now_utc = now.replace(tzinfo=timezone.utc) if now.tzinfo is None else now
         return snooze_dt > now_utc
     except (ValueError, AttributeError):
         return False
 
 
 def _notified_today(row: dict, today: date) -> bool:
-    last = row.get("oir_last_notified_on")
+    last = row.get("LastNotifiedOn")
     if not last:
         return False
     try:
@@ -237,10 +181,10 @@ def _escalation_tier(stale_days: int, l2: int, l3: int) -> tuple[str, list[str]]
 
 def _recipient_fields(roles: list[str]) -> list[str]:
     mapping = {
-        "pm": "oir_pm_email",
-        "tm": "oir_tm_email",
-        "em": "oir_em_email",
-        "dm": "oir_dm_email",   # optional field; absent rows are skipped silently
+        "pm": "PMEmail",
+        "tm": "TMEmail",
+        "em": "EMEmail",
+        "dm": "DMEmail",   # optional field; absent rows are skipped silently
     }
     return [mapping[r] for r in roles if r in mapping]
 

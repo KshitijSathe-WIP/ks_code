@@ -3,9 +3,10 @@
 HTTP-triggered by the Teams bot after the Reply Interpretation Agent
 produces a validated ParsedReply that has passed the confidence gate.
 
-Validates, authorises, writes to Dataverse, and logs every field change
-to oir_interaction_log. Confirm-before-mutate for high-risk fields is
-enforced in the bot layer (this function only receives pre-confirmed payloads).
+Validates, authorises, writes to the OIR Demands SharePoint list, and logs
+every field change to the OIR Interaction Log list. Confirm-before-mutate
+for high-risk fields is enforced in the bot layer (this function only
+receives pre-confirmed payloads).
 
 Expected request body:
 {
@@ -37,7 +38,7 @@ from functions.shared.models import (
 )
 from functions.shared.telemetry import track_event
 from functions.ingest_oir.hashing import content_hash
-from functions.ingest_oir.dataverse_client import DataverseClient
+from functions.shared.sharepoint_client import SharePointListsClient
 from .authz import assert_authorised
 
 logger = logging.getLogger(__name__)
@@ -59,8 +60,8 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
     if not demand_id or not actor_email:
         return func.HttpResponse("demand_id and actor_email are required", status_code=400)
 
-    with DataverseClient() as dv:
-        existing = dv.get_demand(demand_id)
+    with SharePointListsClient() as sp:
+        existing = sp.get_demand(demand_id)
         if existing is None:
             return func.HttpResponse(f"Demand '{demand_id}' not found", status_code=404)
 
@@ -68,7 +69,7 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
         try:
             assert_authorised(actor_email, existing.pm_email, existing.tm_email, existing.em_email)
         except AuthorisationError as exc:
-            _log(dv, InteractionLog(
+            _log(sp, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="REJECTED",
@@ -80,11 +81,11 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
 
         # -- Handle action types ---------------------------------------------
         if action == "NO_CHANGE":
-            dv.upsert_demand({
-                "oir_demandid": demand_id,
-                "oir_last_notified_on": datetime.utcnow().isoformat() + "Z",
+            sp.upsert_demand({
+                "DemandID": demand_id,
+                "LastNotifiedOn": datetime.utcnow().isoformat() + "Z",
             })
-            _log(dv, InteractionLog(
+            _log(sp, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="NO_CHANGE",
@@ -99,12 +100,12 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
         if action == "SNOOZE":
             snooze_hours = CONFIG["notification"]["snooze_hours"]
             snooze_until = (datetime.utcnow() + timedelta(hours=snooze_hours)).isoformat() + "Z"
-            dv.upsert_demand({
-                "oir_demandid": demand_id,
-                "oir_snooze_until": snooze_until,
-                "oir_last_notified_on": datetime.utcnow().isoformat() + "Z",
+            sp.upsert_demand({
+                "DemandID": demand_id,
+                "SnoozeUntil": snooze_until,
+                "LastNotifiedOn": datetime.utcnow().isoformat() + "Z",
             })
-            _log(dv, InteractionLog(
+            _log(sp, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="SNOOZED",
@@ -131,7 +132,7 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
             except ValidationError as exc:
                 return func.HttpResponse(str(exc), status_code=422)
             if new_status != existing.remarks_status:
-                updates["oir_remarks_status"] = new_status
+                updates["RemarksStatus"] = new_status
                 change_logs.append(_field_log(demand_id, actor_email, existing.pm_email,
                                               "remarks_status", existing.remarks_status, new_status))
 
@@ -142,12 +143,12 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
                 return func.HttpResponse(str(exc), status_code=422)
             old_end = existing.dem_end_date.isoformat() if existing.dem_end_date else ""
             if new_end_date != old_end:
-                updates["oir_dem_end_date"] = new_end_date
+                updates["DEMEndDate"] = new_end_date
                 change_logs.append(_field_log(demand_id, actor_email, existing.pm_email,
                                               "dem_end_date", old_end, new_end_date))
 
         if new_comments is not None and new_comments != existing.comments:
-            updates["oir_comments"] = new_comments
+            updates["Comments"] = new_comments
             change_logs.append(_field_log(demand_id, actor_email, existing.pm_email,
                                           "comments", existing.comments, new_comments))
 
@@ -157,22 +158,22 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=200, mimetype="application/json",
             )
 
-        effective_comments = updates.get("oir_comments", existing.comments)
-        effective_status = updates.get("oir_remarks_status", existing.remarks_status)
+        effective_comments = updates.get("Comments", existing.comments)
+        effective_status = updates.get("RemarksStatus", existing.remarks_status)
         new_hash = content_hash(effective_comments, effective_status)
 
         updates.update({
-            "oir_demandid": demand_id,
-            "oir_comments_hash": new_hash,
-            "oir_last_content_change_date": date.today().isoformat(),
-            "oir_escalation_level": 0,
-            "oir_last_notified_on": None,
-            "oir_snooze_until": None,
+            "DemandID": demand_id,
+            "CommentsHash": new_hash,
+            "LastContentChangeDate": date.today().isoformat(),
+            "EscalationLevel": 0,
+            "LastNotifiedOn": None,
+            "SnoozeUntil": None,
         })
 
-        dv.upsert_demand(updates)
+        sp.upsert_demand(updates)
         for entry in change_logs:
-            _log(dv, entry)
+            _log(sp, entry)
 
     track_event("ApplyUpdate.Submit", {"demand_id": demand_id, "fields": list(updates.keys())})
 
@@ -216,8 +217,8 @@ def _field_log(demand_id, actor_email, recipient_email, field, before, after) ->
     )
 
 
-def _log(dv: DataverseClient, entry: InteractionLog) -> None:
+def _log(sp: SharePointListsClient, entry: InteractionLog) -> None:
     try:
-        dv.append_log(entry)
+        sp.append_log(entry)
     except Exception as exc:
         logger.error("Failed to write interaction log: %s", exc)

@@ -19,6 +19,7 @@ import httpx
 
 from functions.shared.telemetry import track_metric, track_event
 from functions.shared import foundry_client
+from functions.shared.sharepoint_client import SharePointListsClient
 from .rules import run_rules
 
 logger = logging.getLogger(__name__)
@@ -68,35 +69,16 @@ def detect_exceptions(timer: func.TimerRequest) -> None:
 # ---------------------------------------------------------------------------
 
 def _ingestion_completed_today(today: date) -> bool:
-    """Check Dataverse for a snapshot row with today's date (proves ingestion ran)."""
-    dv_base = os.environ.get("DATAVERSE_URL", "").rstrip("/") + "/api/data/v9.2"
-    if not dv_base.startswith("http"):
+    """Check the OIR Snapshot History list for a row with today's date (proves ingestion ran)."""
+    if not os.environ.get("SHAREPOINT_SITE_URL", "").startswith("http"):
         return True  # local dev: skip gate
 
-    from azure.identity import ClientSecretCredential
-    dv_host = os.environ["DATAVERSE_URL"].rstrip("/").removeprefix("https://")
-    cred = ClientSecretCredential(
-        tenant_id=os.environ["AZURE_TENANT_ID"],
-        client_id=os.environ["AZURE_CLIENT_ID"],
-        client_secret=os.environ["AZURE_CLIENT_SECRET"],
-    )
-    token = cred.get_token(f"https://{dv_host}/.default").token
-
-    with httpx.Client(timeout=10.0) as http:
-        resp = http.get(
-            f"{dv_base}/oir_snapshot_histories",
-            headers={"Authorization": f"Bearer {token}", "OData-MaxVersion": "4.0",
-                     "OData-Version": "4.0", "Accept": "application/json"},
-            params={
-                "$filter": f"oir_snapshot_date eq {today.isoformat()}",
-                "$top": "1",
-                "$select": "oir_snapshotid",
-            },
-        )
-        if not resp.is_success:
-            logger.warning("Cannot verify ingestion gate: %s", resp.status_code)
-            return False
-        return bool(resp.json().get("value"))
+    try:
+        with SharePointListsClient() as sp:
+            return sp.has_snapshot_for_date(today)
+    except Exception as exc:
+        logger.warning("Cannot verify ingestion gate: %s", exc)
+        return False
 
 
 def _invoke_digest_agent(recipient: dict, shadow_mode: bool) -> str:

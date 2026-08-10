@@ -1,0 +1,82 @@
+{
+  "lists": [
+    {
+      "displayName": "OIR Demands",
+      "description": "Current master record -- one row per demand, upserted on each ingestion.",
+      "columns": [
+        { "name": "DemandID",              "type": "text",     "indexed": true, "required": true },
+        { "name": "Project",               "type": "text" },
+        { "name": "SLDU",                  "type": "text" },
+        { "name": "Role",                  "type": "text" },
+        { "name": "Skill",                 "type": "text" },
+        { "name": "Status",                "type": "choice",   "choices": ["Need Profiles","L1 in Progress","Pending CI FB","Pending CI L2","Pending Offer","Pending Joiner","Joined","Project","To be deleted"] },
+        { "name": "PMName",                "type": "text" },
+        { "name": "PMEmail",               "type": "text" },
+        { "name": "TMName",                "type": "text" },
+        { "name": "TMEmail",               "type": "text" },
+        { "name": "EMName",                "type": "text" },
+        { "name": "EMEmail",               "type": "text" },
+        { "name": "DMEmail",               "type": "text" },
+        { "name": "DEMStartDate",          "type": "dateOnly" },
+        { "name": "DEMEndDate",            "type": "dateOnly", "indexed": true },
+        { "name": "Comments",              "type": "multilineText" },
+        { "name": "RemarksStatus",         "type": "text" },
+        { "name": "CommentsHash",          "type": "text" },
+        { "name": "LastContentChangeDate", "type": "dateOnly", "indexed": true },
+        { "name": "LastNotifiedOn",        "type": "dateTime" },
+        { "name": "EscalationLevel",       "type": "number",   "default": 0 },
+        { "name": "SnoozeUntil",           "type": "dateTime" },
+        { "name": "SourceFile",            "type": "text" },
+        { "name": "FirstSeenDate",         "type": "dateOnly" },
+        { "name": "IsActive",              "type": "boolean",  "default": true, "indexed": true }
+      ],
+      "note": "StaleDays (Dataverse's computed column) is intentionally NOT a stored column -- it's computed in rules.py from LastContentChangeDate at read time."
+    },
+    {
+      "displayName": "OIR Snapshot History",
+      "description": "Append-only daily snapshot -- never updated, never deleted.",
+      "columns": [
+        { "name": "DemandID",       "type": "text",     "indexed": true, "required": true },
+        { "name": "SnapshotDate",   "type": "dateOnly", "indexed": true, "required": true },
+        { "name": "Status",         "type": "text" },
+        { "name": "Comments",       "type": "multilineText" },
+        { "name": "RemarksStatus",  "type": "text" },
+        { "name": "CommentsHash",   "type": "text" },
+        { "name": "DEMEndDate",     "type": "dateOnly" },
+        { "name": "PMEmail",        "type": "text" },
+        { "name": "TMEmail",        "type": "text" },
+        { "name": "SourceFile",     "type": "text" },
+        { "name": "IngestedAt",     "type": "dateTime" }
+      ],
+      "note": "SharePoint has no composite unique constraint. Idempotency on (DemandID, SnapshotDate) is enforced in sharepoint_client.insert_snapshot via a get-then-skip check before insert."
+    },
+    {
+      "displayName": "OIR Interaction Log",
+      "description": "Audit trail -- append-only. Records every notification, reply, and action.",
+      "columns": [
+        { "name": "DemandID",        "type": "text", "indexed": true, "required": true },
+        { "name": "EventType",       "type": "choice", "choices": ["NOTIFIED","REPLIED","NO_CHANGE","SNOOZED","ESCALATED","AUTO_UPDATED","REJECTED"] },
+        { "name": "RecipientEmail",  "type": "text" },
+        { "name": "ActorEmail",      "type": "text" },
+        { "name": "Channel",         "type": "text",   "default": "TEAMS" },
+        { "name": "RuleTriggered",   "type": "text" },
+        { "name": "MessageSent",     "type": "multilineText" },
+        { "name": "ReplyRaw",        "type": "multilineText" },
+        { "name": "ReplyParsed",     "type": "multilineText" },
+        { "name": "Confidence",      "type": "number" },
+        { "name": "FieldChanged",    "type": "text" },
+        { "name": "ValueBefore",     "type": "multilineText" },
+        { "name": "ValueAfter",      "type": "multilineText" },
+        { "name": "CreatedAt",       "type": "dateTime", "indexed": true, "required": true }
+      ]
+    },
+    {
+      "displayName": "OIR Person Map",
+      "description": "Cache of display_name -> email resolutions from Microsoft Graph.",
+      "columns": [
+        { "name": "DisplayName", "type": "text", "indexed": true, "required": true },
+        { "name": "Email",       "type": "text" }
+      ]
+    }
+  ]
+}

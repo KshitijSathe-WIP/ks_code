@@ -109,7 +109,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'AZURE_TENANT_ID', value: '' }       // set in Key Vault reference
         { name: 'AZURE_CLIENT_ID', value: '' }
         { name: 'AZURE_CLIENT_SECRET', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/azure-client-secret/)' }
-        { name: 'DATAVERSE_URL', value: '' }
+        { name: 'SHAREPOINT_SITE_URL', value: '' }
         { name: 'PMO_TEAMS_WEBHOOK_URL', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/pmo-teams-webhook/)' }
         { name: 'SHADOW_MODE', value: 'true' }
         { name: 'FOUNDRY_PROJECT_ENDPOINT', value: '' }

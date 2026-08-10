@@ -1,6 +1,6 @@
 """Microsoft Graph client for owner display-name → UPN resolution.
 
-Results are cached in the Dataverse `oir_person_map` table to avoid
+Results are cached in the OIR Person Map SharePoint list to avoid
 redundant Graph calls and to survive transient Graph outages.
 
 Security: uses client-credentials flow (app-only); no delegated tokens.
