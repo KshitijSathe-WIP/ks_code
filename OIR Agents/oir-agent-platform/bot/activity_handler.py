@@ -23,7 +23,7 @@ from botbuilder.schema import Activity, ActivityTypes
 
 from functions.shared.models import CONFIG, VALID_STATUSES
 from functions.shared import foundry_client
-from functions.shared.sharepoint_client import SharePointListsClient
+from functions.shared.cosmos_client import CosmosDbClient
 from functions.detect_exceptions.rules import _gate
 
 logger = logging.getLogger(__name__)
@@ -184,12 +184,12 @@ def _extract_demand_id(text: str) -> str | None:
 
 
 def _build_context(demand_id: str) -> dict | None:
-    """Fetch the current demand record from the OIR Demands SharePoint list."""
-    if not os.environ.get("SHAREPOINT_SITE_URL", "").startswith("http"):
+    """Fetch the current demand record from the Demands container in Cosmos DB."""
+    if not os.environ.get("COSMOS_ENDPOINT", "").startswith("http"):
         return None
     try:
-        with SharePointListsClient() as sp:
-            demand = sp.get_demand(demand_id)
+        with CosmosDbClient() as db:
+            demand = db.get_demand(demand_id)
         if demand is None:
             return None
         return {

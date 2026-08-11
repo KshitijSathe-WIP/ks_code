@@ -3,10 +3,10 @@
 HTTP-triggered by the Teams bot after the Reply Interpretation Agent
 produces a validated ParsedReply that has passed the confidence gate.
 
-Validates, authorises, writes to the OIR Demands SharePoint list, and logs
-every field change to the OIR Interaction Log list. Confirm-before-mutate
-for high-risk fields is enforced in the bot layer (this function only
-receives pre-confirmed payloads).
+Validates, authorises, writes to the Demands container in Cosmos DB, and
+logs every field change to the InteractionLog container. Confirm-before-
+mutate for high-risk fields is enforced in the bot layer (this function
+only receives pre-confirmed payloads).
 
 Expected request body:
 {
@@ -38,7 +38,7 @@ from functions.shared.models import (
 )
 from functions.shared.telemetry import track_event
 from functions.ingest_oir.hashing import content_hash
-from functions.shared.sharepoint_client import SharePointListsClient
+from functions.shared.cosmos_client import CosmosDbClient
 from .authz import assert_authorised
 
 logger = logging.getLogger(__name__)
@@ -60,8 +60,8 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
     if not demand_id or not actor_email:
         return func.HttpResponse("demand_id and actor_email are required", status_code=400)
 
-    with SharePointListsClient() as sp:
-        existing = sp.get_demand(demand_id)
+    with CosmosDbClient() as db:
+        existing = db.get_demand(demand_id)
         if existing is None:
             return func.HttpResponse(f"Demand '{demand_id}' not found", status_code=404)
 
@@ -69,7 +69,7 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
         try:
             assert_authorised(actor_email, existing.pm_email, existing.tm_email, existing.em_email)
         except AuthorisationError as exc:
-            _log(sp, InteractionLog(
+            _log(db, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="REJECTED",
@@ -81,11 +81,11 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
 
         # -- Handle action types ---------------------------------------------
         if action == "NO_CHANGE":
-            sp.upsert_demand({
+            db.upsert_demand({
                 "DemandID": demand_id,
                 "LastNotifiedOn": datetime.utcnow().isoformat() + "Z",
             })
-            _log(sp, InteractionLog(
+            _log(db, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="NO_CHANGE",
@@ -100,12 +100,12 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
         if action == "SNOOZE":
             snooze_hours = CONFIG["notification"]["snooze_hours"]
             snooze_until = (datetime.utcnow() + timedelta(hours=snooze_hours)).isoformat() + "Z"
-            sp.upsert_demand({
+            db.upsert_demand({
                 "DemandID": demand_id,
                 "SnoozeUntil": snooze_until,
                 "LastNotifiedOn": datetime.utcnow().isoformat() + "Z",
             })
-            _log(sp, InteractionLog(
+            _log(db, InteractionLog(
                 interaction_id=str(uuid.uuid4()),
                 demand_id=demand_id,
                 event_type="SNOOZED",
@@ -171,9 +171,9 @@ def apply_update(req: func.HttpRequest) -> func.HttpResponse:
             "SnoozeUntil": None,
         })
 
-        sp.upsert_demand(updates)
+        db.upsert_demand(updates)
         for entry in change_logs:
-            _log(sp, entry)
+            _log(db, entry)
 
     track_event("ApplyUpdate.Submit", {"demand_id": demand_id, "fields": list(updates.keys())})
 
@@ -217,8 +217,8 @@ def _field_log(demand_id, actor_email, recipient_email, field, before, after) ->
     )
 
 
-def _log(sp: SharePointListsClient, entry: InteractionLog) -> None:
+def _log(db: CosmosDbClient, entry: InteractionLog) -> None:
     try:
-        sp.append_log(entry)
+        db.append_log(entry)
     except Exception as exc:
         logger.error("Failed to write interaction log: %s", exc)

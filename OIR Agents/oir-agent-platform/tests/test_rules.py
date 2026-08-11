@@ -1,7 +1,7 @@
 """Tests for detection rules engine.
 
 Uses freezegun to control date.today() and plain dict fixtures shaped like
-SharePoint list item fields -- no real HTTP calls are made.
+Cosmos DB document fields -- no real HTTP calls are made.
 """
 from __future__ import annotations
 
@@ -136,11 +136,11 @@ class TestConfidenceGate:
 
 
 class TestRunRulesClientSideFiltering:
-    """End-to-end run_rules() against a mocked SharePointListsClient.
+    """End-to-end run_rules() against a mocked CosmosDbClient.
 
-    Verifies the client-side filtering added when Dataverse's OData $filter
-    pushdown was replaced with a full-scan approach (see
-    docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md).
+    Verifies the staleness/expiry logic still holds after moving off
+    Dataverse's OData $filter pushdown (see docs/decisions/0001-* and
+    docs/decisions/0002-* for the data store's evolution).
     """
 
     def _row(self, **overrides) -> dict:
@@ -168,7 +168,7 @@ class TestRunRulesClientSideFiltering:
         mock_client.list_active_demands.return_value = rows
         mock_client.__enter__.return_value = mock_client
         mock_client.__exit__.return_value = False
-        with patch("functions.detect_exceptions.rules.SharePointListsClient", return_value=mock_client):
+        with patch("functions.detect_exceptions.rules.CosmosDbClient", return_value=mock_client):
             return run_rules(today=date.today())
 
     def test_stale_row_grouped_by_pm_and_tm(self):

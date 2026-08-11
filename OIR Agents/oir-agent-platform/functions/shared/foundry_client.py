@@ -4,7 +4,8 @@ Both DetectExceptions and the Teams bot invoke Foundry agents through this
 module instead of an intermediate HTTP wrapper service: no extra deployed
 component, no extra network hop, no extra auth surface -- fewer independent
 failure points. Uses the same service-principal credentials
-(AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET) already used for SharePoint/Graph.
+(AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET) already used for Graph (owner-email
+resolution). Cosmos DB, by contrast, uses its own key-based auth.
 
 Each call creates a fresh thread. Callers here are single-turn (one digest
 per person per day; one reply per Teams message), so there is no benefit to

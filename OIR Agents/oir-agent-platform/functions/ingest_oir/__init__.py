@@ -1,9 +1,9 @@
 """Azure Function: IngestOIR
 
 HTTP-triggered (called by Logic App on SharePoint file-created event).
-Parses the OIR Excel file, hashes content, upserts the OIR Demands
-SharePoint list, and appends a snapshot row for every demand. Designed to
-be fully idempotent.
+Parses the OIR Excel file, hashes content, upserts the Demands container in
+Cosmos DB, and appends a snapshot row for every demand. Designed to be
+fully idempotent.
 
 Expected request body:
 {
@@ -28,7 +28,7 @@ from azure.identity import ClientSecretCredential
 
 from functions.shared.models import CONFIG, IngestionError
 from functions.shared.graph_client import GraphClient
-from functions.shared.sharepoint_client import SharePointListsClient
+from functions.shared.cosmos_client import CosmosDbClient
 from functions.shared.telemetry import track_metric, track_event
 from .parser import parse_workbook
 from .hashing import content_hash
@@ -101,27 +101,27 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
         _alert_pmo(msg)
         return func.HttpResponse(msg, status_code=422)
 
-    # -- Upsert into the OIR Demands SharePoint list --------------------------
+    # -- Upsert into the Demands container ------------------------------------
     rows_processed = 0
     rows_changed = 0
     rows_errored = 0
     seen_ids: set[str] = set()
 
-    with SharePointListsClient() as sp, GraphClient() as graph:
+    with CosmosDbClient() as db, GraphClient() as graph:
         for row in rows:
             seen_ids.add(row.demand_id)
             new_hash = content_hash(row.comments, row.remarks_status)
 
-            # Resolve owner emails via Graph (with SharePoint-list cache)
-            pm_email = _resolve_email(row.pm_name, graph, sp)
-            tm_email = _resolve_email(row.tm_name, graph, sp)
-            em_email = _resolve_email(row.em_name, graph, sp)
+            # Resolve owner emails via Graph (with Cosmos-backed cache)
+            pm_email = _resolve_email(row.pm_name, graph, db)
+            tm_email = _resolve_email(row.tm_name, graph, db)
+            em_email = _resolve_email(row.em_name, graph, db)
 
             try:
-                existing = sp.get_demand(row.demand_id)
+                existing = db.get_demand(row.demand_id)
 
                 if existing is None:
-                    sp.upsert_demand({
+                    db.upsert_demand({
                         "DemandID": row.demand_id,
                         "Project": row.project,
                         "SLDU": row.sldu,
@@ -151,7 +151,7 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
                     if content_changed:
                         rows_changed += 1
 
-                    sp.upsert_demand({
+                    db.upsert_demand({
                         "DemandID": row.demand_id,
                         "Project": row.project,
                         "SLDU": row.sldu,
@@ -182,7 +182,7 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
                         "SourceFile": row.source_file,
                     })
 
-                sp.insert_snapshot({
+                db.insert_snapshot({
                     "DemandID": row.demand_id,
                     "SnapshotDate": file_date.isoformat(),
                     "Status": row.status,
@@ -209,7 +209,7 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
                     _alert_pmo(msg)
                     return func.HttpResponse(msg, status_code=500)
 
-        sp.deactivate_missing(seen_ids)
+        db.deactivate_missing(seen_ids)
 
     duration_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
     track_metric("ingest.rows_processed", rows_processed, {"file_date": file_date_str})
@@ -235,22 +235,22 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_email(display_name: str, graph: GraphClient, sp: SharePointListsClient) -> str | None:
+def _resolve_email(display_name: str, graph: GraphClient, db: CosmosDbClient) -> str | None:
     if not display_name:
         return None
-    cached = sp.get_cached_email(display_name)
+    cached = db.get_cached_email(display_name)
     if cached:
         return cached
     email = graph.resolve_email(display_name)
     if email:
-        sp.cache_email(display_name, email)
+        db.cache_email(display_name, email)
     return email
 
 
 def _graph_token_for_file_download() -> str:
     """Token to download the source .xlsx from its SharePoint document library.
 
-    Distinct from SharePointListsClient's own token acquisition -- this one
+    Distinct from CosmosDbClient's own token acquisition -- this one
     is scoped just to the file download step, before the workbook has even
     been parsed.
     """

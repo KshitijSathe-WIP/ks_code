@@ -1,0 +1,30 @@
+{
+  "database": {
+    "id": "OIRPlatform",
+    "throughput": 400,
+    "note": "Shared throughput across all containers below (none have dedicated throughput) -- cheap at this project's scale, isolated from the account's other databases (IncidentRCA, lineage)."
+  },
+  "containers": [
+    {
+      "id": "Demands",
+      "partitionKey": "/DemandID",
+      "description": "Current master record -- one document per demand, upserted on each ingestion. Document id == DemandID (enables direct point-reads).",
+      "note": "StaleDays (Dataverse's/SharePoint's computed-column equivalent) is intentionally NOT stored -- computed in rules.py from LastContentChangeDate at read time."
+    },
+    {
+      "id": "SnapshotHistory",
+      "partitionKey": "/DemandID",
+      "description": "Append-only daily snapshot. Document id == '{DemandID}::{SnapshotDate}', making upsert_item idempotent by construction -- re-ingesting the same file twice overwrites an identical document rather than duplicating it."
+    },
+    {
+      "id": "InteractionLog",
+      "partitionKey": "/DemandID",
+      "description": "Audit trail -- append-only. Document id == the InteractionLog.interaction_id (a fresh UUID per entry)."
+    },
+    {
+      "id": "PersonMap",
+      "partitionKey": "/DisplayName",
+      "description": "Cache of display_name -> email resolutions from Microsoft Graph. Document id == a filesystem-safe encoding of DisplayName (enables direct point-reads)."
+    }
+  ]
+}

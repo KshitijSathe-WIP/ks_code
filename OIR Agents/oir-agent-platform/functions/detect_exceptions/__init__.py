@@ -19,7 +19,7 @@ import httpx
 
 from functions.shared.telemetry import track_metric, track_event
 from functions.shared import foundry_client
-from functions.shared.sharepoint_client import SharePointListsClient
+from functions.shared.cosmos_client import CosmosDbClient
 from .rules import run_rules
 
 logger = logging.getLogger(__name__)
@@ -69,13 +69,13 @@ def detect_exceptions(timer: func.TimerRequest) -> None:
 # ---------------------------------------------------------------------------
 
 def _ingestion_completed_today(today: date) -> bool:
-    """Check the OIR Snapshot History list for a row with today's date (proves ingestion ran)."""
-    if not os.environ.get("SHAREPOINT_SITE_URL", "").startswith("http"):
+    """Check the SnapshotHistory container for a row with today's date (proves ingestion ran)."""
+    if not os.environ.get("COSMOS_ENDPOINT", "").startswith("http"):
         return True  # local dev: skip gate
 
     try:
-        with SharePointListsClient() as sp:
-            return sp.has_snapshot_for_date(today)
+        with CosmosDbClient() as db:
+            return db.has_snapshot_for_date(today)
     except Exception as exc:
         logger.warning("Cannot verify ingestion gate: %s", exc)
         return False

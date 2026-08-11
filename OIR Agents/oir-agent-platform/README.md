@@ -1,35 +1,36 @@
 # OIR Autonomous Agent Platform
 
-Autonomous multi-agent system that ingests the daily TD Bank OIR file, detects stale and expiring demands, notifies owners via Microsoft Teams, and writes structured updates back to SharePoint Lists.
+Autonomous multi-agent system that ingests the daily TD Bank OIR file, detects stale and expiring demands, notifies owners via Microsoft Teams, and writes structured updates back to Cosmos DB.
 
-> **Data store note:** the original spec (v1.0) specified Dataverse. This
-> implementation uses SharePoint Lists instead — see
-> [docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md](docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md)
-> for why.
+> **Data store note:** the original spec (v1.0) specified Dataverse. The
+> implementation moved to SharePoint Lists, then to Cosmos DB — see
+> [docs/decisions/0002-cosmos-db-instead-of-sharepoint-lists.md](docs/decisions/0002-cosmos-db-instead-of-sharepoint-lists.md)
+> and [docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md](docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md)
+> for the full history and why.
 
 ## Architecture
 
 ```
 SharePoint (daily OIR .xlsx) → Logic App trigger
-  → IngestOIR Function (parse, hash, upsert → OIR Demands SharePoint list)
+  → IngestOIR Function (parse, hash, upsert → Demands container in Cosmos DB)
   → DetectExceptions Function (09:00 IST, rules 1-3)
   → Foundry Digest Agent → Teams Adaptive Cards
-  → Reply Interpretation Agent → ApplyUpdate Function → OIR Demands SharePoint list
+  → Reply Interpretation Agent → ApplyUpdate Function → Demands container in Cosmos DB
 ```
 
 ## Deployment
 
 See [docs/runbook.md](docs/runbook.md) for the full step-by-step sequence
-(infra → SharePoint Lists → Foundry agents → Function deploy → Logic App →
+(infra → Cosmos DB → Foundry agents → Function deploy → Logic App →
 Teams bot → shadow mode). Provisioning scripts:
 
 - `infra/deploy_infra.ps1` — Azure resources (Key Vault, App Insights, Storage, Function App) + service principal, via `az`.
-- `infra/provision_sharepoint_lists.py` — creates the four OIR SharePoint lists directly via Microsoft Graph.
+- `infra/provision_cosmos.py` — creates the `OIRPlatform` Cosmos DB database and its four containers.
 - `agents/deploy_agents.py` — registers the four Foundry agents from their YAML definitions.
 
 ## Sprint 1 checklist (run before enabling live notifications)
 
-- [ ] Provision the four SharePoint lists (`OIR Demands`, `OIR Snapshot History`, `OIR Interaction Log`, `OIR Person Map`)
+- [ ] Provision the `OIRPlatform` database and its four containers (`Demands`, `SnapshotHistory`, `InteractionLog`, `PersonMap`)
 - [ ] Deploy `IngestOIR` Azure Function
 - [ ] Deploy `DetectExceptions` Azure Function
 - [ ] Shadow-mode: verify stale list against 5 consecutive real files
@@ -43,12 +44,12 @@ functions/
   ingest_oir/                ← Azure Function: parse + upsert OIR file
   detect_exceptions/         ← Azure Function: daily rules engine
   apply_update/              ← Azure Function: write validated reply back
-  shared/                    ← models, telemetry, Graph client, SharePoint Lists client, Foundry client
+  shared/                    ← models, telemetry, Graph client, Cosmos DB client, Foundry client
 agents/                      ← Foundry agent YAML definitions
 cards/                       ← Adaptive Card JSON templates
 bot/                         ← Teams Bot Framework app
 logicapps/                   ← Logic App definition (SharePoint file-drop trigger)
-infra/                       ← Bicep IaC + SharePoint Lists provisioning
+infra/                       ← Bicep IaC + Cosmos DB provisioning
 tests/                       ← pytest suite
 docs/
   runbook.md
@@ -66,8 +67,10 @@ pytest tests/ -v
 
 | Variable | Description |
 |---|---|
-| `SHAREPOINT_SITE_URL` | e.g. `https://<tenant>.sharepoint.com/sites/<site-name>` |
-| `AZURE_CLIENT_ID` | Service principal |
+| `COSMOS_ENDPOINT` | e.g. `https://td-bank-cosmos.documents.azure.com:443/` |
+| `COSMOS_KEY` | Primary or secondary key; stored in Key Vault, injected at runtime |
+| `COSMOS_DATABASE` | Defaults to `OIRPlatform` |
+| `AZURE_CLIENT_ID` | Service principal (used for Graph, not Cosmos) |
 | `AZURE_TENANT_ID` | Entra ID tenant |
 | `AZURE_CLIENT_SECRET` | Stored in Key Vault; injected at runtime |
 | `APPINSIGHTS_INSTRUMENTATIONKEY` | Application Insights |

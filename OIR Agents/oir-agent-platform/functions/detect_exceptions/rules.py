@@ -9,11 +9,13 @@ Three rules:
 Output is a dict keyed by recipient email with expiring and stale demand lists,
 ready to pass to the Digest Agent.
 
-Filtering happens client-side in Python against a full scan of active demand
-rows, rather than via server-side query pushdown -- see
-docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md for why (in
-short: SharePoint list filtering via Graph is unreliable on non-indexed
-columns, and at this project's scale a full scan is simpler and more robust).
+Staleness/expiry filtering happens client-side in Python: list_active_demands()
+pushes down IsActive server-side (a cheap Cosmos SQL WHERE clause), but the
+staleness/expiry logic itself depends on today's date, which isn't a value
+that can be precomputed and indexed, so it stays in Python either way. See
+docs/decisions/0002-cosmos-db-instead-of-sharepoint-lists.md and
+docs/decisions/0001-sharepoint-lists-instead-of-dataverse.md for the full
+history of this data store's evolution.
 """
 from __future__ import annotations
 
@@ -23,7 +25,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from functions.shared.models import CONFIG
-from functions.shared.sharepoint_client import SharePointListsClient
+from functions.shared.cosmos_client import CosmosDbClient
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,8 @@ def run_rules(today: date | None = None) -> dict[str, Any]:
     l3_threshold = _STALENESS_CFG["escalation_l3_days"]
     lookahead = _EXPIRY_CFG["lookahead_days"]
 
-    with SharePointListsClient() as sp:
-        active_rows = sp.list_active_demands()
+    with CosmosDbClient() as db:
+        active_rows = db.list_active_demands()
 
     recipient_map: dict[str, dict] = defaultdict(lambda: {"expiring": [], "stale": []})
 

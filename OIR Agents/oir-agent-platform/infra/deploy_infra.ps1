@@ -2,11 +2,12 @@
 .SYNOPSIS
     Deploys the OIR platform's Azure infrastructure (Key Vault, App Insights,
     Storage, Function App) from infra/main.bicep, and creates the service
-    principal used by the Functions to call SharePoint / Graph / Foundry.
+    principal used by the Functions to call Graph / Foundry (Cosmos DB uses
+    its own key-based auth, independent of this service principal).
 
 .DESCRIPTION
-    Wraps `az` CLI calls only - does not touch SharePoint or Foundry (see
-    provision_sharepoint_lists.py and deploy_agents.py for those). Safe to re-run:
+    Wraps `az` CLI calls only - does not touch Cosmos DB or Foundry (see
+    provision_cosmos.py and deploy_agents.py for those). Safe to re-run:
     resource group and deployment are idempotent; the service principal step
     is skipped if -SkipServicePrincipal is passed or one already exists with
     the given display name.
@@ -97,9 +98,10 @@ if (-not $SkipServicePrincipal) {
         # NOTE: this itself performs a role assignment (Microsoft.Authorization/roleAssignments/write),
         # so it needs Owner/User Access Administrator on $ResourceGroup -- same requirement as the
         # Key Vault RBAC grant above. If that's missing, fall back to an app registration with no
-        # role assignment: SharePoint/Graph access for this app is granted separately anyway (Graph
-        # API application permissions with admin consent), so Contributor on the RG is a convenience,
-        # not a hard requirement for the Functions to work once deployed.
+        # role assignment: Graph access for this app is granted separately anyway (Graph API
+        # application permissions with admin consent), and Cosmos DB uses key-based auth
+        # independent of this service principal entirely, so Contributor on the RG is a
+        # convenience, not a hard requirement for the Functions to work once deployed.
         try {
             $sp = az ad sp create-for-rbac `
                 --name $ServicePrincipalName `
@@ -124,10 +126,9 @@ if (-not $SkipServicePrincipal) {
         Write-Host "   AZURE_CLIENT_SECRET = $($sp.password)"
         Write-Host "=====================================================================" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "Next: grant this app Sites.Selected (or Sites.ReadWrite.All) Graph API" -ForegroundColor Cyan
-        Write-Host "application permission with admin consent, and grant it write access to" -ForegroundColor Cyan
-        Write-Host "the target SharePoint site, then re-run provision_sharepoint_lists.py." -ForegroundColor Cyan
+        Write-Host "Next: run 'az cosmosdb keys list' for the target Cosmos DB account and" -ForegroundColor Cyan
+        Write-Host "then run provision_cosmos.py to create the OIRPlatform database + containers." -ForegroundColor Cyan
     }
 }
 
-Write-Host "==> Done. See docs/runbook.md for the remaining SharePoint/Foundry/Teams steps." -ForegroundColor Green
+Write-Host "==> Done. See docs/runbook.md for the remaining Cosmos DB/Foundry/Teams steps." -ForegroundColor Green
