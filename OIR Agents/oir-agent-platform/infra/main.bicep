@@ -115,8 +115,8 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'PMO_TEAMS_WEBHOOK_URL', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/pmo-teams-webhook/)' }
         { name: 'SHADOW_MODE', value: 'true' }
         { name: 'FOUNDRY_PROJECT_ENDPOINT', value: '' }
-        { name: 'FOUNDRY_DIGEST_AGENT_ID', value: '' }
-        { name: 'FOUNDRY_REPLY_INTERPRETER_AGENT_ID', value: '' }
+        { name: 'FOUNDRY_DIGEST_AGENT_NAME', value: '' }
+        { name: 'FOUNDRY_REPLY_INTERPRETER_AGENT_NAME', value: '' }
         { name: 'PMO_GROUP_ID', value: '' }
         { name: 'PMO_OWNER_EMAIL', value: '' }
         { name: 'TEAMS_BOT_APP_ID', value: '' }

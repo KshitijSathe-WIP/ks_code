@@ -120,21 +120,39 @@ python agents/deploy_agents.py --dry-run
 python agents/deploy_agents.py
 ```
 
-This registers `digest-agent`, `reply-interpreter`, `trend-agent`, and
-`orchestrator` from their YAML definitions and writes
-`agents/.deployed_agents.json` with their agent IDs.
+This publishes a new **version** of `digest-agent`, `reply-interpreter`,
+`trend-agent`, and `orchestrator` on the v1 `/agents` surface (the one the
+Foundry portal displays) and writes `agents/.deployed_agents.json` with the
+latest version id per agent.
+
+> **Verify in the portal, not just via the API.** An earlier iteration used
+> SDK 1.x, which writes to a legacy `/assistants` endpoint the portal does
+> not show — and listing agents through that same SDK "confirmed" they
+> existed, which proved nothing. After deploying, open the Foundry portal's
+> **Agents** list and confirm all four appear. See
+> [docs/decisions/0004-foundry-v1-agents-api.md](decisions/0004-foundry-v1-agents-api.md).
 
 **Invocation model:** `detect_exceptions` and `bot/activity_handler.py` call
-these agents directly via `functions/shared/foundry_client.py`, which drives
-the Assistants thread/run API in-process (create thread → post message →
-`create_and_process` → read reply). No separate wrapper service — fewer
-moving parts, one fewer thing to deploy/monitor/secure. Set these app
-settings from `agents/.deployed_agents.json`:
+these agents directly via `functions/shared/foundry_client.py`, using the
+OpenAI **Responses API** against each agent's scoped endpoint
+(`get_openai_client(agent_name=...)`, which needs `allow_preview=True`).
+No separate wrapper service — fewer moving parts, one fewer thing to
+deploy/monitor/secure. v1 agents are addressed by **name**:
 
 ```
-FOUNDRY_DIGEST_AGENT_ID=<digest-agent id>
-FOUNDRY_REPLY_INTERPRETER_AGENT_ID=<reply-interpreter id>
+FOUNDRY_DIGEST_AGENT_NAME=digest-agent
+FOUNDRY_REPLY_INTERPRETER_AGENT_NAME=reply-interpreter
 ```
+
+> **No PII reaches the model.** This account's content filter blocks
+> prompts containing person names or email addresses, which would have
+> failed every digest call. `foundry_client.scrub_recipient()` strips the
+> email and swaps the name for a `{{RECIPIENT_NAME}}` placeholder before
+> the call; `restore_pii()` substitutes it back into the generated text.
+> Free text we don't control (Excel comments, Teams replies) can still trip
+> the filter — that raises `ContentFilteredError` and the bot asks the user
+> to use the Adaptive Card instead. See
+> [docs/decisions/0005-no-pii-sent-to-foundry-agents.md](decisions/0005-no-pii-sent-to-foundry-agents.md).
 
 **Auth:** `foundry_client.py` authenticates as the Function App's own
 system-assigned managed identity when deployed (detected via the
@@ -173,7 +191,7 @@ func azure functionapp publish <functionAppName> --python
 
 Then set the remaining app settings that `main.bicep` left blank
 (`COSMOS_ENDPOINT`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `PMO_GROUP_ID`,
-`PMO_OWNER_EMAIL`, `FOUNDRY_DIGEST_AGENT_ID`/`FOUNDRY_REPLY_INTERPRETER_AGENT_ID`
+`PMO_OWNER_EMAIL`, `FOUNDRY_DIGEST_AGENT_NAME`/`FOUNDRY_REPLY_INTERPRETER_AGENT_NAME`
 from step 3, etc.) via:
 
 ```bash

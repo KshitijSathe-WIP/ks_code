@@ -78,4 +78,4 @@ pytest tests/ -v
 | `TEAMS_BOT_APP_PASSWORD` | Bot Framework secret |
 | `PMO_TEAMS_WEBHOOK_URL` | Alert channel webhook |
 | `FOUNDRY_PROJECT_ENDPOINT` | Azure AI Foundry project endpoint |
-| `FOUNDRY_DIGEST_AGENT_ID` / `FOUNDRY_REPLY_INTERPRETER_AGENT_ID` | From `agents/.deployed_agents.json` |
+| `FOUNDRY_DIGEST_AGENT_NAME` / `FOUNDRY_REPLY_INTERPRETER_AGENT_NAME` | From `agents/.deployed_agents.json` |

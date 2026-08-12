@@ -1,15 +1,22 @@
 """Create or update the four OIR agents in an Azure AI Foundry project.
 
-Reads each *.yaml definition in this directory and registers it as a Foundry
-Agent (Assistants API) via the azure-ai-projects SDK. Idempotent: an agent
-whose `name` already exists in the project is updated in place, never
-duplicated.
+Reads each *.yaml definition in this directory and registers it as a v1
+Foundry Agent (`/agents` surface) via azure-ai-projects 2.x. Idempotent:
+each run publishes a new *version* of the named agent -- Foundry keeps the
+version history and serves the latest, so re-running never duplicates an
+agent.
+
+NOTE ON API SURFACE: an earlier version of this script used
+azure-ai-projects 1.x, whose create_agent() writes to the legacy
+`/assistants` endpoint. Agents created there do not appear in the Foundry
+portal, which reads the v1 `/agents` surface. See
+docs/decisions/0004-foundry-v1-agents-api.md.
 
 Required environment variables:
-    FOUNDRY_PROJECT_ENDPOINT   e.g. https://<project>.services.ai.azure.com/api/projects/<project-name>
-    AZURE_TENANT_ID
-    AZURE_CLIENT_ID
-    AZURE_CLIENT_SECRET
+    FOUNDRY_PROJECT_ENDPOINT   e.g. https://<account>.services.ai.azure.com/api/projects/<project-name>
+
+Auth: uses AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET when AZURE_CLIENT_SECRET
+is set, otherwise falls back to the caller's `az login` session.
 
 Optional:
     DIGEST_MODEL / REPLY_MODEL / TREND_MODEL / ORCHESTRATOR_MODEL
@@ -19,13 +26,9 @@ Usage:
     pip install -r requirements-deploy.txt
     python agents/deploy_agents.py [--dry-run]
 
-Writes agents/.deployed_agents.json mapping agent name -> Foundry agent ID.
-Put the digest-agent and reply-interpreter IDs into the Function App's
-FOUNDRY_DIGEST_AGENT_ID / FOUNDRY_REPLY_INTERPRETER_AGENT_ID settings --
-functions/shared/foundry_client.py drives the thread/run API directly using
-those IDs (see docs/runbook.md). The service principal used by the Functions
-at runtime needs its own "Azure AI Developer" role grant on this Foundry
-account/project; it's separate from whatever identity runs this script.
+Writes agents/.deployed_agents.json mapping agent name -> latest version id.
+v1 agents are addressed by NAME (not an `asst_...` id), so the Function App
+settings are FOUNDRY_DIGEST_AGENT_NAME / FOUNDRY_REPLY_INTERPRETER_AGENT_NAME.
 """
 from __future__ import annotations
 
@@ -37,7 +40,14 @@ import sys
 from pathlib import Path
 
 import yaml
-from azure.identity import ClientSecretCredential
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import (
+    FunctionTool,
+    PromptAgentDefinition,
+    PromptAgentDefinitionTextOptions,
+    TextResponseFormatJsonObject,
+)
+from azure.identity import AzureCliCredential, ClientSecretCredential
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("deploy_agents")
@@ -60,50 +70,79 @@ def _load_agent_def(path: Path) -> dict:
         return yaml.safe_load(f)
 
 
-def _build_tools(agent_def: dict) -> list[dict]:
+def _build_tools(agent_def: dict) -> list[FunctionTool]:
+    """Map the YAML `tools:` list onto v1 FunctionTool objects."""
     tools = []
     for tool in agent_def.get("tools") or []:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": tool["name"],
-                "description": tool.get("description", ""),
-                "parameters": tool.get("parameters", {"type": "object", "properties": {}}),
-            },
-        })
+        tools.append(
+            FunctionTool(
+                name=tool["name"],
+                description=tool.get("description", ""),
+                parameters=tool.get("parameters", {"type": "object", "properties": {}}),
+                strict=False,
+            )
+        )
     return tools
 
 
-def deploy_one(client, agent_def: dict, existing_by_name: dict, dry_run: bool) -> str:
+def _build_definition(agent_def: dict) -> PromptAgentDefinition:
     name = agent_def["name"]
     model = os.environ.get(_MODEL_OVERRIDE_ENV.get(name, ""), "") or agent_def["model"]["deployment"]
-    instructions = agent_def["system_prompt"]
+    params = agent_def["model"].get("parameters", {}) or {}
+
+    kwargs: dict = {
+        "model": model,
+        "instructions": agent_def["system_prompt"],
+    }
+
+    if "temperature" in params:
+        kwargs["temperature"] = params["temperature"]
+
+    # JSON-mode agents (reply-interpreter, orchestrator) declare
+    # response_format: {type: json_object} in their YAML.
+    response_format = params.get("response_format") or {}
+    if response_format.get("type") == "json_object":
+        kwargs["text"] = PromptAgentDefinitionTextOptions(format=TextResponseFormatJsonObject())
+
     tools = _build_tools(agent_def)
+    if tools:
+        kwargs["tools"] = tools
 
-    existing = existing_by_name.get(name)
+    return PromptAgentDefinition(**kwargs)
+
+
+def deploy_one(client: AIProjectClient, agent_def: dict, dry_run: bool) -> str:
+    name = agent_def["name"]
+    definition = _build_definition(agent_def)
+    description = " ".join((agent_def.get("description") or "").split())[:1000]
+
     if dry_run:
-        action = "update" if existing else "create"
-        logger.info("[dry-run] would %s agent '%s' (model=%s, tools=%d)", action, name, model, len(tools))
-        return existing.id if existing else "dry-run-id"
-
-    if existing:
-        logger.info("Updating existing agent '%s' (id=%s)", name, existing.id)
-        client.agents.update_agent(
-            existing.id,
-            model=model,
-            instructions=instructions,
-            tools=tools,
+        logger.info(
+            "[dry-run] would publish agent '%s' (model=%s, tools=%d, json_mode=%s)",
+            name, definition.model, len(getattr(definition, "tools", None) or []),
+            getattr(definition, "text", None) is not None,
         )
-        return existing.id
+        return "dry-run-version"
 
-    logger.info("Creating agent '%s' (model=%s)", name, model)
-    created = client.agents.create_agent(
-        model=model,
-        name=name,
-        instructions=instructions,
-        tools=tools,
+    logger.info("Publishing agent '%s' (model=%s)", name, definition.model)
+    version = client.agents.create_version(
+        agent_name=name,
+        definition=definition,
+        description=description,
     )
-    return created.id
+    logger.info("  -> version id=%s", version.id)
+    return version.id
+
+
+def _get_credential():
+    if os.environ.get("AZURE_CLIENT_SECRET"):
+        return ClientSecretCredential(
+            tenant_id=os.environ["AZURE_TENANT_ID"],
+            client_id=os.environ["AZURE_CLIENT_ID"],
+            client_secret=os.environ["AZURE_CLIENT_SECRET"],
+        )
+    logger.info("AZURE_CLIENT_SECRET not set -- using the current 'az login' session")
+    return AzureCliCredential()
 
 
 def main() -> int:
@@ -116,43 +155,17 @@ def main() -> int:
         logger.error("Missing required environment variable: FOUNDRY_PROJECT_ENDPOINT")
         return 1
 
-    try:
-        from azure.ai.projects import AIProjectClient
-    except ImportError:
-        logger.error(
-            "azure-ai-projects is not installed. Run: pip install -r requirements-deploy.txt"
-        )
-        return 1
-
-    # Prefer an explicit service principal (used by the deployed Functions at
-    # runtime); fall back to the caller's own `az login` session for
-    # interactive/admin use like this script.
-    if os.environ.get("AZURE_CLIENT_SECRET"):
-        credential = ClientSecretCredential(
-            tenant_id=os.environ["AZURE_TENANT_ID"],
-            client_id=os.environ["AZURE_CLIENT_ID"],
-            client_secret=os.environ["AZURE_CLIENT_SECRET"],
-        )
-    else:
-        from azure.identity import AzureCliCredential
-        logger.info("AZURE_CLIENT_SECRET not set -- using the current 'az login' session")
-        credential = AzureCliCredential()
-
-    client = AIProjectClient(endpoint=endpoint, credential=credential)
-
-    existing_agents = list(client.agents.list_agents())
-    existing_by_name = {a.name: a for a in existing_agents}
+    client = AIProjectClient(endpoint=endpoint, credential=_get_credential(), allow_preview=True)
 
     deployed: dict[str, str] = {}
     for filename in AGENT_FILES:
         agent_def = _load_agent_def(AGENTS_DIR / filename)
-        agent_id = deploy_one(client, agent_def, existing_by_name, args.dry_run)
-        deployed[agent_def["name"]] = agent_id
+        deployed[agent_def["name"]] = deploy_one(client, agent_def, args.dry_run)
 
     if not args.dry_run:
         with open(DEPLOYED_MAP_PATH, "w", encoding="utf-8") as f:
             json.dump(deployed, f, indent=2)
-        logger.info("Wrote agent ID map to %s", DEPLOYED_MAP_PATH)
+        logger.info("Wrote agent version map to %s", DEPLOYED_MAP_PATH)
 
     logger.info("Deployment complete: %s", deployed)
     return 0

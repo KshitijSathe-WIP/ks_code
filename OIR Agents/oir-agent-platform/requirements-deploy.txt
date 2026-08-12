@@ -1,5 +1,5 @@
 # Tooling used only to provision/deploy the platform — not needed at Function runtime.
-azure-ai-projects==1.*
+azure-ai-projects>=2.4
 pyyaml==6.*
 azure-identity==1.*
 httpx==0.*

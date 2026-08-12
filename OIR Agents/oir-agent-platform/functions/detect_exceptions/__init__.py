@@ -84,15 +84,21 @@ def _ingestion_completed_today(today: date) -> bool:
 def _invoke_digest_agent(recipient: dict, shadow_mode: bool) -> str:
     """Call the Foundry Digest Agent for one recipient; return the generated digest text.
 
+    No PII is sent to the model: scrub_recipient() drops the email and
+    replaces the name with a placeholder, which restore_pii() swaps back
+    into the generated text afterwards. This both satisfies the account's
+    PII content filter and keeps personal data out of the model entirely --
+    see docs/decisions/0005-no-pii-sent-to-foundry-agents.md.
+
     This only generates the message text. Actually delivering it to Teams
     requires proactive messaging (a stored conversationReference per
     recipient, established when they first message the bot), which is not
     yet built -- see docs/runbook.md. For now the generated text is
     returned/logged so the digest content itself can be verified in shadow mode.
     """
-    agent_id = os.environ.get("FOUNDRY_DIGEST_AGENT_ID", "")
-    if not agent_id:
-        logger.warning("FOUNDRY_DIGEST_AGENT_ID not set; skipping agent invocation")
+    agent_name = os.environ.get("FOUNDRY_DIGEST_AGENT_NAME", "")
+    if not agent_name:
+        logger.warning("FOUNDRY_DIGEST_AGENT_NAME not set; skipping agent invocation")
         return ""
 
     target_email = recipient["email"]
@@ -101,7 +107,10 @@ def _invoke_digest_agent(recipient: dict, shadow_mode: bool) -> str:
         logger.info("SHADOW MODE: routing %s digest to PMO (%s)", target_email, pmo_email)
         recipient = {**recipient, "email": pmo_email, "_shadow_original": target_email}
 
-    digest_text = foundry_client.invoke_agent(agent_id, json.dumps({"recipient": recipient}))
+    safe_payload, display_name = foundry_client.scrub_recipient(recipient)
+    raw = foundry_client.invoke_agent(agent_name, json.dumps({"recipient": safe_payload}))
+    digest_text = foundry_client.restore_pii(raw, display_name)
+
     logger.info("Digest generated for %s (%d chars) -- Teams delivery not yet implemented",
                 recipient["email"], len(digest_text))
     return digest_text

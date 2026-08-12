@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _HIGH_RISK_FIELDS = set(CONFIG["agent"]["high_risk_fields"])
 _APPLY_UPDATE_URL = os.environ.get("APPLY_UPDATE_FUNCTION_URL", "")
 _APPLY_UPDATE_KEY = os.environ.get("APPLY_UPDATE_FUNCTION_KEY", "")
-_REPLY_INTERPRETER_AGENT_ID = os.environ.get("FOUNDRY_REPLY_INTERPRETER_AGENT_ID", "")
+_REPLY_INTERPRETER_AGENT_NAME = os.environ.get("FOUNDRY_REPLY_INTERPRETER_AGENT_NAME", "")
 
 
 class OIRActivityHandler(ActivityHandler):
@@ -121,7 +121,19 @@ class OIRActivityHandler(ActivityHandler):
             )
             return
 
-        parsed = _invoke_reply_interpreter(context, text)
+        try:
+            parsed = _invoke_reply_interpreter(context, text)
+        except foundry_client.ContentFilteredError:
+            # Free text we don't control (Excel comments, the user's own
+            # words) can contain names/emails, which this account's content
+            # filter blocks. Degrade to the card rather than failing loudly.
+            logger.info("Reply for %s blocked by content filter -- steering user to the card", demand_id)
+            await turn_context.send_activity(
+                "I can't process that message automatically -- it may contain personal details. "
+                "Please use the update card instead, and I'll record it straight away."
+            )
+            return
+
         if parsed is None:
             await turn_context.send_activity(
                 "Sorry, I couldn't interpret that reply. Please try again or use the card."
@@ -207,14 +219,22 @@ def _build_context(demand_id: str) -> dict | None:
 
 
 def _invoke_reply_interpreter(context: dict, reply: str) -> dict | None:
-    if not _REPLY_INTERPRETER_AGENT_ID:
-        logger.warning("FOUNDRY_REPLY_INTERPRETER_AGENT_ID not set")
+    """Parse a free-text reply into a structured update.
+
+    Raises ContentFilteredError (not caught here) when the prompt trips the
+    account's PII filter -- the caller turns that into a "please use the
+    card" nudge. Other agent failures are logged and return None.
+    """
+    if not _REPLY_INTERPRETER_AGENT_NAME:
+        logger.warning("FOUNDRY_REPLY_INTERPRETER_AGENT_NAME not set")
         return None
     try:
         return foundry_client.invoke_agent_json(
-            _REPLY_INTERPRETER_AGENT_ID,
+            _REPLY_INTERPRETER_AGENT_NAME,
             json.dumps({"context": context, "reply": reply}),
         )
+    except foundry_client.ContentFilteredError:
+        raise
     except foundry_client.FoundryAgentError as exc:
         logger.error("Reply interpreter call failed: %s", exc)
         return None
