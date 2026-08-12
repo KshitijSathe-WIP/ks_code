@@ -127,24 +127,35 @@ This registers `digest-agent`, `reply-interpreter`, `trend-agent`, and
 **Invocation model:** `detect_exceptions` and `bot/activity_handler.py` call
 these agents directly via `functions/shared/foundry_client.py`, which drives
 the Assistants thread/run API in-process (create thread → post message →
-`create_and_process` → read reply) using the same service-principal
-credentials as Graph. No separate wrapper service — fewer moving parts, one
-fewer thing to deploy/monitor/secure. Set these app settings from
-`agents/.deployed_agents.json`:
+`create_and_process` → read reply). No separate wrapper service — fewer
+moving parts, one fewer thing to deploy/monitor/secure. Set these app
+settings from `agents/.deployed_agents.json`:
 
 ```
 FOUNDRY_DIGEST_AGENT_ID=<digest-agent id>
 FOUNDRY_REPLY_INTERPRETER_AGENT_ID=<reply-interpreter id>
 ```
 
-The service principal used by the Functions (from step 1) needs its own
-grant to call the Foundry project — separate from whatever identity ran
-`deploy_agents.py` above:
+**Auth:** `foundry_client.py` authenticates as the Function App's own
+system-assigned managed identity when deployed (detected via the
+`IDENTITY_ENDPOINT` app setting Azure sets automatically), falling back to
+the `sp-oir-dev` service principal for local/CLI dev. Grant **Azure AI
+Developer** to whichever identity you're actually using:
 
 ```bash
+# Deployed Function App -- grant its managed identity (recommended; no
+# app secret needed, and no separate request if Contributor/Key Vault
+# grants already went to this identity by convention):
+az role assignment create --assignee <functionApp principalId> --role "Azure AI Developer" \
+  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-account-name>
+
+# Local/CLI dev -- grant sp-oir-dev instead:
 az role assignment create --assignee <AZURE_CLIENT_ID> --role "Azure AI Developer" \
   --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<foundry-account-name>
 ```
+
+See [docs/decisions/0003-foundry-uses-managed-identity.md](decisions/0003-foundry-uses-managed-identity.md)
+for why this differs from `graph_client.py`, which still uses `sp-oir-dev`.
 
 > **Known gap:** `_invoke_digest_agent` only *generates* the digest text —
 > it does not deliver it to Teams. Proactive Teams messaging needs a stored

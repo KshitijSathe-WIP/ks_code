@@ -3,9 +3,18 @@
 Both DetectExceptions and the Teams bot invoke Foundry agents through this
 module instead of an intermediate HTTP wrapper service: no extra deployed
 component, no extra network hop, no extra auth surface -- fewer independent
-failure points. Uses the same service-principal credentials
-(AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET) already used for Graph (owner-email
-resolution). Cosmos DB, by contrast, uses its own key-based auth.
+failure points.
+
+Authenticates as the Function App's own system-assigned managed identity
+when running in Azure (it holds the "Azure AI Developer" role on the
+Foundry account directly), falling back to the sp-oir-dev service
+principal (AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET) for local/CLI dev,
+where no managed identity exists. See
+docs/decisions/0003-foundry-uses-managed-identity.md for why: the RBAC
+grant intended for sp-oir-dev landed on the Function App's managed
+identity instead, and switching this client to use it was simpler than
+requesting a duplicate grant. Cosmos DB, by contrast, uses its own
+key-based auth, independent of either identity.
 
 Each call creates a fresh thread. Callers here are single-turn (one digest
 per person per day; one reply per Teams message), so there is no benefit to
@@ -20,7 +29,7 @@ from typing import Optional
 
 from azure.ai.agents.models import MessageRole, RunStatus
 from azure.ai.projects import AIProjectClient
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +42,30 @@ class FoundryAgentError(RuntimeError):
     """Raised when a Foundry agent run fails, expires, cancels, or returns no reply."""
 
 
+def _get_credential():
+    """Prefer the Function App's own managed identity (it already holds
+    Azure AI Developer on this Foundry account). IDENTITY_ENDPOINT is set
+    by Azure Functions/App Service only when a managed identity is
+    actually available, so this reliably distinguishes deployed-in-Azure
+    from local/CLI dev without probing via a failed token request.
+    """
+    if os.environ.get("IDENTITY_ENDPOINT"):
+        logger.info("Using the Function App's managed identity for Foundry auth")
+        return ManagedIdentityCredential()
+    logger.info("No managed identity available -- falling back to sp-oir-dev service principal")
+    return ClientSecretCredential(
+        tenant_id=os.environ["AZURE_TENANT_ID"],
+        client_id=os.environ["AZURE_CLIENT_ID"],
+        client_secret=os.environ["AZURE_CLIENT_SECRET"],
+    )
+
+
 def _get_client() -> AIProjectClient:
     global _client
     if _client is None:
-        credential = ClientSecretCredential(
-            tenant_id=os.environ["AZURE_TENANT_ID"],
-            client_id=os.environ["AZURE_CLIENT_ID"],
-            client_secret=os.environ["AZURE_CLIENT_SECRET"],
-        )
         _client = AIProjectClient(
             endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
-            credential=credential,
+            credential=_get_credential(),
         )
     return _client
 
