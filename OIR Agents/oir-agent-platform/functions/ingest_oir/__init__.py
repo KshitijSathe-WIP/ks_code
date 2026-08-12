@@ -39,10 +39,10 @@ _FILE_PATTERN = re.compile(r"^TD Bank OIR \d{2}-\d{2}-\d{4}\.xlsx$")
 _ERROR_RATE_ABORT_THRESHOLD = CONFIG["ingestion"]["error_rate_abort_threshold"]
 
 
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+bp = func.Blueprint()
 
 
-@app.route(route="ingest-oir", methods=["POST"])
+@bp.route(route="ingest-oir", methods=["POST"])
 def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
     start = datetime.utcnow()
     try:

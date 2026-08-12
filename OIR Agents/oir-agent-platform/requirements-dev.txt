@@ -1,0 +1,15 @@
+# Local development: everything in requirements.txt, plus the test suite and
+# the Teams bot host (bot/app.py runs as its own aiohttp service, not inside
+# the Function App, so its dependencies are deliberately kept out of
+# requirements.txt -- Oryx installs that file into the Function App).
+-r requirements.txt
+
+# Teams bot host
+botbuilder-core==4.*
+botbuilder-integration-aiohttp==4.*
+adaptive-cards-py==0.*
+
+# Tests
+pytest==8.*
+pytest-asyncio==0.*
+freezegun==1.*

@@ -68,7 +68,7 @@ pytest tests/ -v
 | Variable | Description |
 |---|---|
 | `COSMOS_ENDPOINT` | e.g. `https://td-bank-cosmos.documents.azure.com:443/` |
-| `COSMOS_KEY` | Primary or secondary key; stored in Key Vault, injected at runtime |
+| `COSMOS_KEY` | Local dev / provisioning only — the deployed app uses managed identity (ADR 0006) |
 | `COSMOS_DATABASE` | Defaults to `OIRPlatform` |
 | `AZURE_CLIENT_ID` | Service principal (used for Graph, not Cosmos) |
 | `AZURE_TENANT_ID` | Entra ID tenant |

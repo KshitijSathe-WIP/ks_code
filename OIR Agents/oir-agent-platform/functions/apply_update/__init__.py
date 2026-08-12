@@ -43,10 +43,10 @@ from .authz import assert_authorised
 
 logger = logging.getLogger(__name__)
 
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+bp = func.Blueprint()
 
 
-@app.route(route="apply-update", methods=["POST"])
+@bp.route(route="apply-update", methods=["POST"])
 def apply_update(req: func.HttpRequest) -> func.HttpResponse:
     try:
         body = req.get_json()

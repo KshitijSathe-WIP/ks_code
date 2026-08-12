@@ -24,10 +24,10 @@ from .rules import run_rules
 
 logger = logging.getLogger(__name__)
 
-app = func.FunctionApp()
+bp = func.Blueprint()
 
 # 09:00 IST = 03:30 UTC
-@app.timer_trigger(schedule="0 30 3 * * *", arg_name="timer", run_on_startup=False)
+@bp.timer_trigger(schedule="0 30 3 * * *", arg_name="timer", run_on_startup=False)
 def detect_exceptions(timer: func.TimerRequest) -> None:
     today = date.today()
 

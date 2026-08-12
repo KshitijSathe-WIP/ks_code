@@ -15,6 +15,12 @@ PATCH-a-field approach, so upsert_demand() does a read-merge-write to
 preserve partial-update semantics. SnapshotHistory instead gets its
 idempotency for free: a deterministic id of "{DemandID}::{SnapshotDate}"
 means re-ingesting the same file just overwrites an identical document.
+
+AUTH: prefers Entra ID (the Function App's managed identity, which holds
+the Cosmos "Built-in Data Contributor" data-plane role) so no account key
+is stored anywhere. Falls back to COSMOS_KEY for local dev and for
+provisioning scripts. See
+docs/decisions/0006-cosmos-managed-identity-auth.md.
 """
 from __future__ import annotations
 
@@ -26,6 +32,7 @@ from typing import Optional
 
 from azure.cosmos import CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from azure.identity import AzureCliCredential, ManagedIdentityCredential
 
 from functions.shared.models import InteractionLog, OIRDemand
 
@@ -47,15 +54,33 @@ def _safe_id(value: str) -> str:
     return _UNSAFE_ID_CHARS.sub("_", value)
 
 
+def _get_credential():
+    """Entra ID when running in Azure, account key otherwise.
+
+    IDENTITY_ENDPOINT is set by Azure Functions/App Service only when a
+    managed identity is available, so it reliably distinguishes deployed
+    from local. COSMOS_KEY stays supported for local dev and for
+    infra/provision_cosmos.py, which needs control-plane rights that the
+    data-plane role deliberately does not grant.
+    """
+    if os.environ.get("IDENTITY_ENDPOINT"):
+        logger.info("Using the Function App's managed identity for Cosmos auth")
+        return ManagedIdentityCredential()
+    key = os.environ.get("COSMOS_KEY")
+    if key:
+        return key
+    logger.info("No COSMOS_KEY set -- falling back to the current 'az login' session")
+    return AzureCliCredential()
+
+
 class CosmosDbClient:
     """Thin Cosmos DB client for the four OIR containers."""
 
     def __init__(self) -> None:
         endpoint = os.environ["COSMOS_ENDPOINT"]
-        key = os.environ["COSMOS_KEY"]
         database_name = os.environ.get(_DATABASE_NAME_ENV, _DEFAULT_DATABASE_NAME)
 
-        self._client = CosmosClient(endpoint, credential=key)
+        self._client = CosmosClient(endpoint, credential=_get_credential())
         self._db = self._client.get_database_client(database_name)
         self._demands = self._db.get_container_client(CONTAINER_DEMANDS)
         self._snapshots = self._db.get_container_client(CONTAINER_SNAPSHOTS)

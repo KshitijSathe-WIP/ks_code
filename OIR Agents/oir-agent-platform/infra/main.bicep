@@ -109,8 +109,11 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'AZURE_TENANT_ID', value: '' }       // set in Key Vault reference
         { name: 'AZURE_CLIENT_ID', value: '' }
         { name: 'AZURE_CLIENT_SECRET', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/azure-client-secret/)' }
+        // No COSMOS_KEY: the Function App's managed identity holds the Cosmos
+        // "Built-in Data Contributor" data-plane role, so cosmos_client.py
+        // authenticates via Entra ID and no account key is stored anywhere.
+        // See docs/decisions/0006-cosmos-managed-identity-auth.md.
         { name: 'COSMOS_ENDPOINT', value: '' }
-        { name: 'COSMOS_KEY', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/cosmos-key/)' }
         { name: 'COSMOS_DATABASE', value: 'OIRPlatform' }
         { name: 'PMO_TEAMS_WEBHOOK_URL', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/pmo-teams-webhook/)' }
         { name: 'SHADOW_MODE', value: 'true' }

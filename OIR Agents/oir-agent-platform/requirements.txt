@@ -1,16 +1,17 @@
-azure-functions-core-tools==4.*
+# Azure Function App RUNTIME dependencies ONLY.
+#
+# Oryx installs exactly this file during remote build, so anything here must
+# be a real, pip-installable package the deployed code actually imports.
+# Test-only and bot-only packages belong in requirements-dev.txt; provisioning
+# tooling belongs in requirements-deploy.txt.
+#
+# (Historical note: this file used to list `azure-functions-core-tools`, which
+# is not a pip package at all -- it's a standalone/npm CLI. It broke the first
+# real deployment.)
 azure-functions==1.*
 azure-identity==1.*
-azure-keyvault-secrets==4.*
-azure-ai-projects>=2.4
 azure-cosmos==4.*
+azure-ai-projects>=2.4
 openpyxl==3.*
 httpx==0.*
 opencensus-ext-azure==1.*
-pyyaml==6.*
-botbuilder-core==4.*
-botbuilder-integration-aiohttp==4.*
-adaptive-cards-py==0.*
-pytest==8.*
-pytest-asyncio==0.*
-freezegun==1.*

@@ -24,9 +24,11 @@ as authoritative on the data layer.
 | Tenant ID (from the Foundry portal link) | `6efbfbdd-57af-4e28-9f2c-9b75f72a6ffe` — this is `wilmodel3.onmicrosoft.com`, an Azure/AI infrastructure sandbox with **no SharePoint Online or reliable Dataverse access** (see ADRs above) — **verify** with `az account show --query tenantId -o tsv` before creating the service principal in step 1 |
 
 Copy [.env.example](../.env.example) to `.env` — it's pre-filled with the
-Foundry and Cosmos endpoint URLs above. `COSMOS_KEY`, the service-principal
-(`AZURE_CLIENT_ID`/`SECRET`), and downstream secrets from steps 1–6 below
-still need to be added.
+Foundry and Cosmos endpoint URLs above. The service principal
+(`AZURE_CLIENT_ID`/`SECRET`) and downstream secrets from steps 1–6 below
+still need to be added. `COSMOS_KEY` is only needed for local dev and for
+`provision_cosmos.py` — the deployed app uses managed identity instead
+(ADR 0006).
 
 > Two abandoned attempts remain in this tenant at no cost if left alone, or
 > can be deleted once this Cosmos DB approach is confirmed working:
@@ -70,11 +72,11 @@ $env:AZURE_CLIENT_SECRET = "..."
 
 Run `-WhatIf` first if you want to preview the deployment without applying it.
 
-> This service principal is used for Graph (owner-email resolution) and
-> Foundry (agent invocation) — **not** for Cosmos DB, which uses its own
-> key-based auth (step 2). No RBAC role assignment is needed to reach
-> Cosmos DB, which is why it sidesteps every wall Dataverse and SharePoint
-> hit in this tenant.
+> This service principal is used for Graph (owner-email resolution) only.
+> The **deployed** app reaches Cosmos DB and Foundry through the Function
+> App's own managed identity — see ADR 0003 and ADR 0006. Cosmos needs no
+> `Microsoft.Authorization` role assignment at all, which is why it
+> sidesteps every wall Dataverse and SharePoint hit in this tenant.
 
 ## 2. Cosmos DB database and containers
 
@@ -184,9 +186,51 @@ for why this differs from `graph_client.py`, which still uses `sp-oir-dev`.
 
 ## 4. Function App deployment
 
+The v2 Python model needs a single entry point at the **deployment root**:
+`function_app.py` (which registers the three `func.Blueprint`s from
+`functions/`), plus `host.json`, `requirements.txt` and `config.json`.
+Package exactly those, then zip-deploy with a remote build:
+
 ```bash
-cd functions
-func azure functionapp publish <functionAppName> --python
+# Build the package (root-level files + the functions/ package, no __pycache__)
+mkdir pkg && cp function_app.py host.json requirements.txt config.json pkg/ && cp -r functions pkg/
+find pkg -name __pycache__ -type d -exec rm -rf {} +
+cd pkg && zip -r ../oir-deploy.zip . && cd ..
+
+az functionapp deployment source config-zip \
+  --name <functionAppName> --resource-group <rg> \
+  --src oir-deploy.zip --build-remote true --timeout 1800
+```
+
+> `--build-remote true` is **required**. Without it (and despite
+> `SCM_DO_BUILD_DURING_DEPLOYMENT=true`) the zip is only extracted, no
+> `pip install` runs, and the app silently indexes zero functions.
+>
+> `requirements.txt` is what Oryx installs, so it must contain only real,
+> pip-installable runtime packages. Sanity-check it before deploying —
+> `pip install --dry-run -r requirements.txt` — since a bad entry fails the
+> build. Test/bot-only packages live in `requirements-dev.txt`.
+>
+> `func azure functionapp publish` also works if you have the Core Tools
+> CLI installed; the zip route above avoids that dependency.
+
+**Verifying the deploy — don't trust `az functionapp function list`.** On
+this app it returns an empty list even when everything is working (the ARM
+listing doesn't reliably reflect blueprint-registered v2 functions). Probe
+the endpoints instead:
+
+```bash
+# 401 (not 404) already proves the route is registered and key-protected
+curl -s -o /dev/null -w "%{http_code}" -X POST https://<app>.azurewebsites.net/api/ingest-oir
+
+KEY=$(az functionapp keys list --name <app> --resource-group <rg> --query functionKeys.default -o tsv)
+# Expect our own 400 validation message -- proves imports + code executed
+curl -X POST "https://<app>.azurewebsites.net/api/ingest-oir?code=$KEY" \
+  -H 'Content-Type: application/json' -d '{"fileName":"bad.xlsx","fileDate":"2026-08-12","fileUrl":"https://x"}'
+# Expect 404 "Demand '...' not found" -- proves Cosmos was reached via managed identity
+curl -X POST "https://<app>.azurewebsites.net/api/apply-update?code=$KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"demand_id":"PROBE-404","actor_email":"<you>","action":"NO_CHANGE"}'
 ```
 
 Then set the remaining app settings that `main.bicep` left blank
@@ -202,12 +246,12 @@ az functionapp config appsettings set --name <functionAppName> --resource-group 
              AZURE_TENANT_ID=... PMO_OWNER_EMAIL=...
 ```
 
-Secrets (`AZURE_CLIENT_SECRET`, `COSMOS_KEY`, `PMO_TEAMS_WEBHOOK_URL`,
+Secrets (`AZURE_CLIENT_SECRET`, `PMO_TEAMS_WEBHOOK_URL`,
 `TEAMS_BOT_APP_PASSWORD`) go into the Key Vault created in step 1 — the
 Bicep already wires `@Microsoft.KeyVault(...)` references for them:
 
 ```bash
-az keyvault secret set --vault-name kv-oir-dev-<suffix> --name cosmos-key --value "<value>"
+az keyvault secret set --vault-name kv-oir-dev-<suffix> --name azure-client-secret --value "<value>"
 ```
 
 ## 5. Logic App (SharePoint file-drop trigger)
