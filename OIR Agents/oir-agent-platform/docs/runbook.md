@@ -24,11 +24,11 @@ as authoritative on the data layer.
 | Tenant ID (from the Foundry portal link) | `6efbfbdd-57af-4e28-9f2c-9b75f72a6ffe` — this is `wilmodel3.onmicrosoft.com`, an Azure/AI infrastructure sandbox with **no SharePoint Online or reliable Dataverse access** (see ADRs above) — **verify** with `az account show --query tenantId -o tsv` before creating the service principal in step 1 |
 
 Copy [.env.example](../.env.example) to `.env` — it's pre-filled with the
-Foundry and Cosmos endpoint URLs above. The service principal
-(`AZURE_CLIENT_ID`/`SECRET`) and downstream secrets from steps 1–6 below
-still need to be added. `COSMOS_KEY` is only needed for local dev and for
-`provision_cosmos.py` — the deployed app uses managed identity instead
-(ADR 0006).
+Foundry and Cosmos endpoint URLs above. Everything else in it is for
+**local dev only**: the deployed app stores no secrets and authenticates
+everything through its managed identity (ADR 0007). `COSMOS_KEY` is still
+needed locally and by `provision_cosmos.py`, which does control-plane work
+the data-plane role deliberately excludes.
 
 > Two abandoned attempts remain in this tenant at no cost if left alone, or
 > can be deleted once this Cosmos DB approach is confirmed working:
@@ -72,11 +72,10 @@ $env:AZURE_CLIENT_SECRET = "..."
 
 Run `-WhatIf` first if you want to preview the deployment without applying it.
 
-> This service principal is used for Graph (owner-email resolution) only.
-> The **deployed** app reaches Cosmos DB and Foundry through the Function
-> App's own managed identity — see ADR 0003 and ADR 0006. Cosmos needs no
-> `Microsoft.Authorization` role assignment at all, which is why it
-> sidesteps every wall Dataverse and SharePoint hit in this tenant.
+> The service principal is now only a **local-dev fallback**. The deployed
+> app reaches Cosmos DB, Foundry *and* Graph through the Function App's own
+> managed identity, so it stores no secret at all — ADRs 0003, 0006, 0007.
+> Pass `-SkipServicePrincipal` if you don't need the local-dev path.
 
 ## 2. Cosmos DB database and containers
 
@@ -246,13 +245,23 @@ az functionapp config appsettings set --name <functionAppName> --resource-group 
              AZURE_TENANT_ID=... PMO_OWNER_EMAIL=...
 ```
 
-Secrets (`AZURE_CLIENT_SECRET`, `PMO_TEAMS_WEBHOOK_URL`,
-`TEAMS_BOT_APP_PASSWORD`) go into the Key Vault created in step 1 — the
-Bicep already wires `@Microsoft.KeyVault(...)` references for them:
+**No secrets are stored.** Cosmos, Foundry and Graph all authenticate as
+the Function App's managed identity when deployed, so there is no
+`AZURE_CLIENT_SECRET`, `COSMOS_KEY` or `TEAMS_BOT_APP_PASSWORD` to place
+anywhere, and the Key Vault created in step 1 is currently unused. See
+[ADR 0007](decisions/0007-single-permission-request-no-secrets.md).
 
-```bash
-az keyvault secret set --vault-name kv-oir-dev-<suffix> --name azure-client-secret --value "<value>"
-```
+`PMO_TEAMS_WEBHOOK_URL` is a plain app setting when you want failure
+alerts; leave it blank and alerting simply no-ops.
+
+> **One outstanding privileged request** — Graph application permissions,
+> admin-consented onto the Function App's managed identity
+> (principalId from `az functionapp identity show`):
+> `User.Read.All` (resolve display name → email) and
+> `GroupMember.Read.All` (PMO membership check in `authz.py`).
+> Until this lands, ingestion cannot populate owner emails; everything
+> else works. `sp-oir-dev` has **no** Graph permissions either, so this
+> grant was always required — the Key Vault secret would not have helped.
 
 ## 5. Logic App (SharePoint file-drop trigger)
 

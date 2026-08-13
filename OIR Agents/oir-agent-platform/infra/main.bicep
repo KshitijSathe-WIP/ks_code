@@ -106,24 +106,35 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
         { name: 'APPINSIGHTS_INSTRUMENTATIONKEY', value: appInsights.properties.InstrumentationKey }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
-        { name: 'AZURE_TENANT_ID', value: '' }       // set in Key Vault reference
+        // No AZURE_CLIENT_SECRET: all three outbound integrations (Cosmos,
+        // Foundry, Graph) authenticate as this app's managed identity when
+        // deployed, so no client secret exists to store. AZURE_TENANT_ID /
+        // AZURE_CLIENT_ID remain only for the local-dev fallback path.
+        // See docs/decisions/0007-single-permission-request-no-secrets.md.
+        { name: 'AZURE_TENANT_ID', value: '' }
         { name: 'AZURE_CLIENT_ID', value: '' }
-        { name: 'AZURE_CLIENT_SECRET', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/azure-client-secret/)' }
         // No COSMOS_KEY: the Function App's managed identity holds the Cosmos
         // "Built-in Data Contributor" data-plane role, so cosmos_client.py
         // authenticates via Entra ID and no account key is stored anywhere.
         // See docs/decisions/0006-cosmos-managed-identity-auth.md.
         { name: 'COSMOS_ENDPOINT', value: '' }
         { name: 'COSMOS_DATABASE', value: 'OIRPlatform' }
-        { name: 'PMO_TEAMS_WEBHOOK_URL', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/pmo-teams-webhook/)' }
+        // Plain setting, not a Key Vault reference: it's a channel webhook
+        // URL, alerting is optional (code no-ops when unset), and routing it
+        // through Key Vault would reintroduce a permission request for no
+        // real security gain at POC scope.
+        { name: 'PMO_TEAMS_WEBHOOK_URL', value: '' }
         { name: 'SHADOW_MODE', value: 'true' }
         { name: 'FOUNDRY_PROJECT_ENDPOINT', value: '' }
         { name: 'FOUNDRY_DIGEST_AGENT_NAME', value: '' }
         { name: 'FOUNDRY_REPLY_INTERPRETER_AGENT_NAME', value: '' }
         { name: 'PMO_GROUP_ID', value: '' }
         { name: 'PMO_OWNER_EMAIL', value: '' }
+        // No TEAMS_BOT_APP_PASSWORD: when the bot is registered it should use
+        // a managed-identity bot type (MicrosoftAppType=SystemAssignedMSI),
+        // which has no password at all. Revisit only if a password-based bot
+        // registration turns out to be unavoidable.
         { name: 'TEAMS_BOT_APP_ID', value: '' }
-        { name: 'TEAMS_BOT_APP_PASSWORD', value: '@Microsoft.KeyVault(SecretUri=${kv.outputs.keyVaultUri}secrets/teams-bot-password/)' }
       ]
     }
     httpsOnly: true

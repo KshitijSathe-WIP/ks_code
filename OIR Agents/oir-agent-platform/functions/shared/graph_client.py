@@ -3,9 +3,15 @@
 Results are cached in the PersonMap container in Cosmos DB to avoid
 redundant Graph calls and to survive transient Graph outages.
 
-Security: uses client-credentials flow (app-only); no delegated tokens.
-All names from the OIR file are treated as untrusted input — they are
-passed as filter values only, never interpolated into query paths.
+Security: app-only auth, no delegated tokens. All names from the OIR file
+are treated as untrusted input — they are passed as filter values only,
+never interpolated into query paths.
+
+AUTH: prefers the Function App's system-assigned managed identity when
+running in Azure, falling back to the sp-oir-dev service principal for
+local/CLI dev. The Graph *application permissions* (User.Read.All,
+GroupMember.Read.All) must be admin-consented onto whichever identity is
+in play — see docs/decisions/0007-single-permission-request-no-secrets.md.
 """
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ import os
 from typing import Optional
 
 import httpx
-from azure.identity import ClientSecretCredential
+from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +28,28 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _SCOPE = "https://graph.microsoft.com/.default"
 
 
+def _get_credential():
+    """Managed identity in Azure, service principal locally.
+
+    Mirrors cosmos_client/foundry_client so all three outbound integrations
+    use one identity in production and no secret is stored anywhere.
+    """
+    if os.environ.get("IDENTITY_ENDPOINT"):
+        logger.info("Using the Function App's managed identity for Graph auth")
+        return ManagedIdentityCredential()
+    logger.info("No managed identity available -- falling back to sp-oir-dev service principal")
+    return ClientSecretCredential(
+        tenant_id=os.environ["AZURE_TENANT_ID"],
+        client_id=os.environ["AZURE_CLIENT_ID"],
+        client_secret=os.environ["AZURE_CLIENT_SECRET"],
+    )
+
+
 class GraphClient:
     """Thin wrapper around Microsoft Graph for user resolution."""
 
     def __init__(self) -> None:
-        tenant_id = os.environ["AZURE_TENANT_ID"]
-        client_id = os.environ["AZURE_CLIENT_ID"]
-        client_secret = os.environ["AZURE_CLIENT_SECRET"]
-
-        self._credential = ClientSecretCredential(
-            tenant_id=tenant_id,
-            client_id=client_id,
-            client_secret=client_secret,
-        )
+        self._credential = _get_credential()
         self._http = httpx.Client(timeout=10.0)
 
     # ------------------------------------------------------------------

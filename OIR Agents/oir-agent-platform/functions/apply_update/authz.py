@@ -12,7 +12,6 @@ import logging
 import os
 
 import httpx
-from azure.identity import ClientSecretCredential
 
 from functions.shared.models import AuthorisationError
 
@@ -60,9 +59,9 @@ def _is_pmo_member(actor_email: str) -> bool:
 
 
 def _graph_token() -> str:
-    cred = ClientSecretCredential(
-        tenant_id=os.environ["AZURE_TENANT_ID"],
-        client_id=os.environ["AZURE_CLIENT_ID"],
-        client_secret=os.environ["AZURE_CLIENT_SECRET"],
-    )
-    return cred.get_token("https://graph.microsoft.com/.default").token
+    """Reuse the shared Graph credential so the PMO membership check runs
+    under the same identity (and the same admin-consented permissions) as
+    owner-email resolution."""
+    from functions.shared.graph_client import _get_credential
+
+    return _get_credential().get_token("https://graph.microsoft.com/.default").token

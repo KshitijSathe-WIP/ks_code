@@ -61,8 +61,10 @@ $grantKvRbac = if ($SkipKeyVaultRbac) { 'false' } else { 'true' }
 
 if ($SkipKeyVaultRbac) {
     Write-Host "==> Skipping Key Vault RBAC grant (requires Owner/User Access Administrator)." -ForegroundColor Yellow
-    Write-Host "    Someone with that role must run this afterward so the Function App can read secrets:" -ForegroundColor Yellow
-    Write-Host "    az role assignment create --assignee <functionApp principalId> --role 'Key Vault Secrets User' --scope <keyVault resource id>" -ForegroundColor Yellow
+    Write-Host "    Harmless as things stand: the app stores no secrets and reads nothing from" -ForegroundColor Yellow
+    Write-Host "    Key Vault -- Cosmos, Foundry and Graph all use the managed identity." -ForegroundColor Yellow
+    Write-Host "    Only re-enable this if a future secret genuinely has to live in the vault." -ForegroundColor Yellow
+    Write-Host "    See docs/decisions/0007-single-permission-request-no-secrets.md" -ForegroundColor Yellow
 }
 
 if ($WhatIf) {
