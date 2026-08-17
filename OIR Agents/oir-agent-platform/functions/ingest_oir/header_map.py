@@ -37,7 +37,10 @@ HEADER_ALIASES: Dict[str, list[str]] = {
     "dem_start_date": ["dem st date", "dem start date", "demand start date"],  # real: DEM_ST_DATE
     "dem_end_date":   ["dem end date", "demand end date"],                     # real: DEM_END_DATE
     "comments":       ["comments", "comment"],                                 # real: Comments
-    "remarks_status": ["remarks", "remarks status"],                           # real: Remarks
+    # real: "Remarks" up to 11-Aug-2026, renamed to "Remark" from 12-Aug.
+    # Both accepted -- this field is required, so the rename broke ingestion
+    # outright until it was caught by tests/test_real_oir_files.py.
+    "remarks_status": ["remarks", "remark", "remarks status"],
 
     # Owner email columns. NOT present in the OIR file today -- these exist so
     # that the moment the upstream report adds them, ingestion picks them up
