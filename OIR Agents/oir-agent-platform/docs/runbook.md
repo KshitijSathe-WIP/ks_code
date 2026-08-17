@@ -79,6 +79,23 @@ Run `-WhatIf` first if you want to preview the deployment without applying it.
 
 ## 2. Cosmos DB database and containers
 
+> **Networking.** The Function App reaches Cosmos over a VNet path: subnet
+> `snet-oir-func` (`10.2.3.0/26`, delegated to `Microsoft.Web/serverFarms`,
+> `Microsoft.AzureCosmosDB` service endpoint) with regional VNet
+> integration and `vnetRouteAllEnabled=true`. The Cosmos account itself is
+> currently on **All networks**, so nothing depends on that path yet.
+>
+> Two other apps share this account (`td-rca-api`, `data-tools-app`) and
+> are **not** VNet-integrated. Re-enabling the Cosmos firewall without
+> covering them first will break them — the ordered procedure and its
+> prerequisites are in
+> [ADR 0009](decisions/0009-function-app-vnet-integration.md).
+>
+> Because `vnetRouteAllEnabled=true` routes *all* outbound traffic through
+> the VNet, a future UDR forcing `0.0.0.0/0` through the `TD-BANK-Firewall`
+> in that VNet would break Foundry and Graph calls too. Check for route
+> tables first when diagnosing a sudden outbound failure.
+
 Get the account's key (a plain Contributor-level `listKeys` read — no
 `Microsoft.Authorization/roleAssignments/write` needed, unlike everything
 else in this tenant):
