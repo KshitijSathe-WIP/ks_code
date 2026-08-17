@@ -68,14 +68,23 @@ pytest tests/ -v
 | Variable | Description |
 |---|---|
 | `COSMOS_ENDPOINT` | e.g. `https://td-bank-cosmos.documents.azure.com:443/` |
-| `COSMOS_KEY` | Local dev / provisioning only — the deployed app uses managed identity (ADR 0006) |
 | `COSMOS_DATABASE` | Defaults to `OIRPlatform` |
-| `AZURE_CLIENT_ID` | Service principal (used for Graph, not Cosmos) |
-| `AZURE_TENANT_ID` | Entra ID tenant |
-| `AZURE_CLIENT_SECRET` | Stored in Key Vault; injected at runtime |
-| `APPINSIGHTS_INSTRUMENTATIONKEY` | Application Insights |
-| `TEAMS_BOT_APP_ID` | Bot Framework app ID |
-| `TEAMS_BOT_APP_PASSWORD` | Bot Framework secret |
-| `PMO_TEAMS_WEBHOOK_URL` | Alert channel webhook |
 | `FOUNDRY_PROJECT_ENDPOINT` | Azure AI Foundry project endpoint |
-| `FOUNDRY_DIGEST_AGENT_NAME` / `FOUNDRY_REPLY_INTERPRETER_AGENT_NAME` | From `agents/.deployed_agents.json` |
+| `FOUNDRY_DIGEST_AGENT_NAME` / `FOUNDRY_REPLY_INTERPRETER_AGENT_NAME` | Agent *names* — v1 agents aren't `asst_` ids (ADR 0004) |
+| `APPINSIGHTS_INSTRUMENTATIONKEY` | Application Insights |
+| `PMO_TEAMS_WEBHOOK_URL` | Alert channel webhook; blank disables alerting |
+| `PMO_OWNER_EMAIL` / `SHADOW_MODE` | Shadow-mode routing target and switch |
+| `PMO_MEMBER_EMAILS` | Comma-separated PMO authorisation allowlist (ADR 0008) |
+| `GRAPH_LOOKUP_ENABLED` | Default `false`. Owner emails come from the OIR file; Graph lookup is an optional backstop needing admin consent (ADR 0008) |
+| `TEAMS_BOT_APP_ID` | Bot Framework app ID (bot not yet registered) |
+
+**The deployed app stores no secrets.** Cosmos, Foundry and Graph all
+authenticate as the Function App's managed identity (ADRs 0003, 0006, 0007),
+so there is no `AZURE_CLIENT_SECRET`, `COSMOS_KEY` or
+`TEAMS_BOT_APP_PASSWORD` in app settings or in Key Vault. The following are
+needed for **local development only**:
+
+| Variable | Description |
+|---|---|
+| `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` | `sp-oir-dev` fallback used when no managed identity is present |
+| `COSMOS_KEY` | Local dev, and `provision_cosmos.py` — which does control-plane work the data-plane role deliberately excludes |

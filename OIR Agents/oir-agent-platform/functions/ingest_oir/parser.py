@@ -40,6 +40,16 @@ class RawRow:
     comments: str
     remarks_status: str
     source_file: str
+    # Parent requisition (RLS_ID). Many positions share one -- demand_id is
+    # the per-position SR_ID_2. Kept so a demand can be traced back.
+    requisition_id: str = ""
+    # Owner emails, when the file carries them. Empty when the columns are
+    # absent (the current state of the real OIR report) -- see ADR 0008.
+    pm_email: str = ""
+    tm_email: str = ""
+    em_email: str = ""
+    dm_name: str = ""
+    dm_email: str = ""
 
 
 def _extract_trailing_date(sheet_name: str) -> str:
@@ -49,13 +59,28 @@ def _extract_trailing_date(sheet_name: str) -> str:
 
 
 def resolve_or_sheet(workbook: Workbook):
-    """Find the 'OR <date>' sheet; pick latest if multiple exist."""
-    candidates = [s for s in workbook.sheetnames if s.strip().upper().startswith("OR ")]
+    """Find the data sheet; pick the latest if several match.
+
+    Real files name this sheet 'OIR 6th Aug ' (note: 'OIR', a written-out
+    date, and often a trailing space) -- the original 'OR <date>' rule
+    matched none of them. Pivot/summary tabs in the same workbook
+    ('OIR Pivot', 'AXNB Pivot') must be excluded, since they also begin
+    with 'OIR'.
+    """
+    excluded = ("pivot", "summary")
+    candidates = [
+        s for s in workbook.sheetnames
+        if s.strip().upper().startswith(("OIR ", "OR "))
+        and not any(word in s.strip().lower() for word in excluded)
+    ]
     if not candidates:
-        raise IngestionError("No sheet matching 'OR <date>' found in workbook")
+        raise IngestionError(
+            f"No OIR data sheet found. Sheets present: {workbook.sheetnames}. "
+            "Expected one named like 'OIR <date>' (pivot/summary tabs are ignored)."
+        )
     if len(candidates) > 1:
         candidates.sort(key=_extract_trailing_date, reverse=True)
-        logger.warning("Multiple 'OR' sheets found; using '%s'", candidates[0])
+        logger.warning("Multiple OIR sheets found (%s); using '%s'", candidates, candidates[0])
     return workbook[candidates[0]]
 
 
@@ -124,27 +149,43 @@ def parse_workbook(path: str, source_file: str) -> Generator[RawRow, None, None]
     data_rows = rows[header_row_idx + 1:]
     error_count = 0
 
+    def _get(row, field: str) -> str:
+        """Value for an optional canonical field, '' when the column is absent."""
+        idx = col_map.get(field)
+        if idx is None or idx >= len(row):
+            return ""
+        return _cell_str(row[idx])
+
     for row in data_rows:
         demand_id = _cell_str(row[col_map["demand_id"]])
         if not demand_id:
             continue  # skip blank rows
 
         try:
+            skill = _get(row, "skill")
             yield RawRow(
                 demand_id=demand_id,
-                project=_cell_str(row[col_map.get("project", -1)] if col_map.get("project") is not None else ""),
-                sldu=_cell_str(row[col_map["sldu"]] if "sldu" in col_map else ""),
-                role=_cell_str(row[col_map["role"]]),
-                skill=_cell_str(row[col_map["skill"]] if "skill" in col_map else ""),
-                status=_cell_str(row[col_map["status"]]),
-                pm_name=_cell_str(row[col_map["pm_name"]]),
-                tm_name=_cell_str(row[col_map.get("tm_name", -1)] if "tm_name" in col_map else ""),
-                em_name=_cell_str(row[col_map.get("em_name", -1)] if "em_name" in col_map else ""),
+                project=_get(row, "project"),
+                sldu=_get(row, "sldu"),
+                # Real files carry no role column; the essential skill is what
+                # a reader actually recognises the demand by, so fall back to it.
+                role=_get(row, "role") or skill,
+                skill=skill,
+                status=_get(row, "status"),
+                pm_name=_get(row, "pm_name"),
+                tm_name=_get(row, "tm_name"),
+                em_name=_get(row, "em_name"),
+                dm_name=_get(row, "dm_name"),
                 dem_start_date=_cell_date(row[col_map["dem_start_date"]] if "dem_start_date" in col_map else None),
                 dem_end_date=_cell_date(row[col_map["dem_end_date"]]),
-                comments=_cell_str(row[col_map["comments"]]),
-                remarks_status=_cell_str(row[col_map["remarks_status"]]),
+                comments=_get(row, "comments"),
+                remarks_status=_get(row, "remarks_status"),
                 source_file=source_file,
+                requisition_id=_get(row, "requisition_id"),
+                pm_email=_get(row, "pm_email"),
+                tm_email=_get(row, "tm_email"),
+                em_email=_get(row, "em_email"),
+                dm_email=_get(row, "dm_email"),
             )
         except (IndexError, TypeError) as exc:
             error_count += 1

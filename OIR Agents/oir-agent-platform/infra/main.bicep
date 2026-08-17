@@ -128,6 +128,10 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'FOUNDRY_PROJECT_ENDPOINT', value: '' }
         { name: 'FOUNDRY_DIGEST_AGENT_NAME', value: '' }
         { name: 'FOUNDRY_REPLY_INTERPRETER_AGENT_NAME', value: '' }
+        // Owner emails come from the OIR file (ADR 0008); Graph lookup is an
+        // optional backstop that needs admin-consented app permissions.
+        { name: 'GRAPH_LOOKUP_ENABLED', value: 'false' }
+        { name: 'PMO_MEMBER_EMAILS', value: '' }
         { name: 'PMO_GROUP_ID', value: '' }
         { name: 'PMO_OWNER_EMAIL', value: '' }
         // No TEAMS_BOT_APP_PASSWORD: when the bot is registered it should use

@@ -254,14 +254,22 @@ anywhere, and the Key Vault created in step 1 is currently unused. See
 `PMO_TEAMS_WEBHOOK_URL` is a plain app setting when you want failure
 alerts; leave it blank and alerting simply no-ops.
 
-> **One outstanding privileged request** — Graph application permissions,
-> admin-consented onto the Function App's managed identity
-> (principalId from `az functionapp identity show`):
-> `User.Read.All` (resolve display name → email) and
-> `GroupMember.Read.All` (PMO membership check in `authz.py`).
-> Until this lands, ingestion cannot populate owner emails; everything
-> else works. `sp-oir-dev` has **no** Graph permissions either, so this
-> grant was always required — the Key Vault secret would not have helped.
+> **No outstanding privileged request.** Owner emails now come from the
+> OIR file rather than a Graph lookup, which removed the last permission
+> dependency — see
+> [ADR 0008](decisions/0008-owner-emails-from-the-oir-file.md).
+>
+> **The remaining blocker is an upstream file change, not IT.** The OIR
+> report carries owner *names* but no owner *emails*, so no demand can be
+> notified yet (`ingest.rows_without_owner` currently reports 235/235).
+> Ask whoever produces the report to add **`PM_EMAIL`**, **`TM_EMAIL`** and
+> **`EM_EMAIL`** columns — it already contains `Recruit TA EMAIL`, so the
+> data exists upstream. No code change is needed when they land.
+>
+> If Graph consent is ever granted instead, set `GRAPH_LOOKUP_ENABLED=true`
+> and names resolve automatically for any row still missing an email; the
+> two mechanisms compose. Set `PMO_MEMBER_EMAILS` (comma-separated) for the
+> PMO authorisation override, which otherwise needs the same Graph consent.
 
 ## 5. Logic App (SharePoint file-drop trigger)
 

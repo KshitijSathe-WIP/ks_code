@@ -27,7 +27,7 @@ class TestHeaderMapping:
         assert "dem_end_date" in col_map
 
     def test_alias_headers_resolve(self):
-        headers = ["Sr_ID", "Project Name", "Role", "Category",
+        headers = ["Sr_ID", "Project Name", "Role", "Current Status",
                    "SL_PM_Name", "Demand End Date", "Comment", "Remarks Status"]
         col_map = build_column_map(headers)
         assert "demand_id" in col_map
@@ -35,6 +35,14 @@ class TestHeaderMapping:
         assert "pm_name" in col_map
         assert "dem_end_date" in col_map
         assert "comments" in col_map
+
+    def test_category_is_not_treated_as_status(self):
+        """`Category` in the real file is a business unit ("WMG"), not a
+        demand status -- binding it to `status` silently corrupts every row."""
+        headers = ["RLS_ID", "Project", "Category", "PM_NAME",
+                   "DEM_END_DATE", "Comments", "Remarks"]
+        with pytest.raises(ValueError, match="status"):
+            build_column_map(headers)
 
     def test_column_order_irrelevant(self):
         headers = ["Remarks Status", "Comments", "DEM End Date", "Status",
@@ -110,7 +118,7 @@ class TestSheetResolution:
         wb.save(tmp)
 
         loaded = openpyxl.load_workbook(tmp)
-        with pytest.raises(IngestionError, match="No sheet"):
+        with pytest.raises(IngestionError, match="No OIR data sheet"):
             resolve_or_sheet(loaded)
         loaded.close()
         os.unlink(tmp)

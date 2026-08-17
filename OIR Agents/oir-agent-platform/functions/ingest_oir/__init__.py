@@ -107,115 +107,142 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
     rows_errored = 0
     seen_ids: set[str] = set()
 
-    with CosmosDbClient() as db, GraphClient() as graph:
-        for row in rows:
-            seen_ids.add(row.demand_id)
-            new_hash = content_hash(row.comments, row.remarks_status)
+    # Graph is optional: it only helps when the OIR file carries no email
+    # columns, and it needs application permissions the tenant hasn't
+    # granted. Set GRAPH_LOOKUP_ENABLED=true once that consent lands.
+    graph_enabled = os.environ.get("GRAPH_LOOKUP_ENABLED", "false").lower() == "true"
+    graph = GraphClient() if graph_enabled else None
+    rows_without_owner = 0
 
-            # Resolve owner emails via Graph (with Cosmos-backed cache)
-            pm_email = _resolve_email(row.pm_name, graph, db)
-            tm_email = _resolve_email(row.tm_name, graph, db)
-            em_email = _resolve_email(row.em_name, graph, db)
+    try:
+        with CosmosDbClient() as db:
+            for row in rows:
+                seen_ids.add(row.demand_id)
+                new_hash = content_hash(row.comments, row.remarks_status)
 
-            try:
-                existing = db.get_demand(row.demand_id)
+                # Prefer the file's own email columns; fall back to Graph only
+                # if it's enabled (see _resolve_email / ADR 0008).
+                pm_email = _resolve_email(row.pm_name, row.pm_email, graph, db)
+                tm_email = _resolve_email(row.tm_name, row.tm_email, graph, db)
+                em_email = _resolve_email(row.em_name, row.em_email, graph, db)
+                if not (pm_email or tm_email or em_email):
+                    rows_without_owner += 1
 
-                if existing is None:
-                    db.upsert_demand({
-                        "DemandID": row.demand_id,
-                        "Project": row.project,
-                        "SLDU": row.sldu,
-                        "Role": row.role,
-                        "Skill": row.skill,
-                        "Status": row.status,
-                        "PMName": row.pm_name,
-                        "PMEmail": pm_email or "",
-                        "TMName": row.tm_name,
-                        "TMEmail": tm_email or "",
-                        "EMName": row.em_name,
-                        "EMEmail": em_email or "",
-                        "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
-                        "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
-                        "Comments": row.comments,
-                        "RemarksStatus": row.remarks_status,
-                        "CommentsHash": new_hash,
-                        "LastContentChangeDate": file_date.isoformat(),
-                        "FirstSeenDate": file_date.isoformat(),
-                        "EscalationLevel": 0,
-                        "IsActive": True,
-                        "SourceFile": row.source_file,
-                    })
-                    rows_changed += 1
-                else:
-                    content_changed = existing.comments_hash != new_hash
-                    if content_changed:
+                try:
+                    existing = db.get_demand(row.demand_id)
+
+                    if existing is None:
+                        db.upsert_demand({
+                            "DemandID": row.demand_id,
+                            "Project": row.project,
+                            "SLDU": row.sldu,
+                            "Role": row.role,
+                            "Skill": row.skill,
+                            "Status": row.status,
+                            "PMName": row.pm_name,
+                            "PMEmail": pm_email or "",
+                            "TMName": row.tm_name,
+                            "TMEmail": tm_email or "",
+                            "EMName": row.em_name,
+                            "EMEmail": em_email or "",
+                            "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
+                            "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                            "Comments": row.comments,
+                            "RemarksStatus": row.remarks_status,
+                            "CommentsHash": new_hash,
+                            "LastContentChangeDate": file_date.isoformat(),
+                            "FirstSeenDate": file_date.isoformat(),
+                            "EscalationLevel": 0,
+                            "IsActive": True,
+                            "SourceFile": row.source_file,
+                        })
                         rows_changed += 1
+                    else:
+                        content_changed = existing.comments_hash != new_hash
+                        if content_changed:
+                            rows_changed += 1
 
-                    db.upsert_demand({
+                        db.upsert_demand({
+                            "DemandID": row.demand_id,
+                            "Project": row.project,
+                            "SLDU": row.sldu,
+                            "Role": row.role,
+                            "Skill": row.skill,
+                            "Status": row.status,
+                            "PMName": row.pm_name,
+                            "PMEmail": pm_email or existing.pm_email,
+                            "TMName": row.tm_name,
+                            "TMEmail": tm_email or existing.tm_email,
+                            "EMName": row.em_name,
+                            "EMEmail": em_email or existing.em_email,
+                            "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
+                            "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                            "Comments": row.comments,
+                            "RemarksStatus": row.remarks_status,
+                            "CommentsHash": new_hash,
+                            "LastContentChangeDate": (
+                                file_date.isoformat() if content_changed
+                                else existing.last_content_change_date.isoformat()
+                            ),
+                            "EscalationLevel": 0 if content_changed else existing.escalation_level,
+                            "LastNotifiedOn": None if content_changed else (
+                                existing.last_notified_on.isoformat() + "Z"
+                                if existing.last_notified_on else None
+                            ),
+                            "IsActive": True,
+                            "SourceFile": row.source_file,
+                        })
+
+                    db.insert_snapshot({
                         "DemandID": row.demand_id,
-                        "Project": row.project,
-                        "SLDU": row.sldu,
-                        "Role": row.role,
-                        "Skill": row.skill,
+                        "SnapshotDate": file_date.isoformat(),
                         "Status": row.status,
-                        "PMName": row.pm_name,
-                        "PMEmail": pm_email or existing.pm_email,
-                        "TMName": row.tm_name,
-                        "TMEmail": tm_email or existing.tm_email,
-                        "EMName": row.em_name,
-                        "EMEmail": em_email or existing.em_email,
-                        "DEMStartDate": row.dem_start_date.isoformat() if row.dem_start_date else None,
-                        "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
                         "Comments": row.comments,
                         "RemarksStatus": row.remarks_status,
                         "CommentsHash": new_hash,
-                        "LastContentChangeDate": (
-                            file_date.isoformat() if content_changed
-                            else existing.last_content_change_date.isoformat()
-                        ),
-                        "EscalationLevel": 0 if content_changed else existing.escalation_level,
-                        "LastNotifiedOn": None if content_changed else (
-                            existing.last_notified_on.isoformat() + "Z"
-                            if existing.last_notified_on else None
-                        ),
-                        "IsActive": True,
+                        "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
+                        "PMEmail": pm_email or "",
+                        "TMEmail": tm_email or "",
                         "SourceFile": row.source_file,
+                        "IngestedAt": datetime.utcnow().isoformat() + "Z",
                     })
+                    rows_processed += 1
 
-                db.insert_snapshot({
-                    "DemandID": row.demand_id,
-                    "SnapshotDate": file_date.isoformat(),
-                    "Status": row.status,
-                    "Comments": row.comments,
-                    "RemarksStatus": row.remarks_status,
-                    "CommentsHash": new_hash,
-                    "DEMEndDate": row.dem_end_date.isoformat() if row.dem_end_date else None,
-                    "PMEmail": pm_email or "",
-                    "TMEmail": tm_email or "",
-                    "SourceFile": row.source_file,
-                    "IngestedAt": datetime.utcnow().isoformat() + "Z",
-                })
-                rows_processed += 1
+                except Exception as exc:
+                    rows_errored += 1
+                    logger.error("Error processing demand '%s': %s", row.demand_id, exc)
+                    if rows_errored / total_rows > _ERROR_RATE_ABORT_THRESHOLD:
+                        msg = (
+                            f"Abort: error rate {rows_errored}/{total_rows} "
+                            f"exceeded {int(_ERROR_RATE_ABORT_THRESHOLD*100)}% threshold."
+                        )
+                        logger.error(msg)
+                        _alert_pmo(msg)
+                        return func.HttpResponse(msg, status_code=500)
 
-            except Exception as exc:
-                rows_errored += 1
-                logger.error("Error processing demand '%s': %s", row.demand_id, exc)
-                if rows_errored / total_rows > _ERROR_RATE_ABORT_THRESHOLD:
-                    msg = (
-                        f"Abort: error rate {rows_errored}/{total_rows} "
-                        f"exceeded {int(_ERROR_RATE_ABORT_THRESHOLD*100)}% threshold."
-                    )
-                    logger.error(msg)
-                    _alert_pmo(msg)
-                    return func.HttpResponse(msg, status_code=500)
-
-        db.deactivate_missing(seen_ids)
+            db.deactivate_missing(seen_ids)
+    finally:
+        if graph is not None:
+            graph.close()
 
     duration_ms = int((datetime.utcnow() - start).total_seconds() * 1000)
     track_metric("ingest.rows_processed", rows_processed, {"file_date": file_date_str})
     track_metric("ingest.rows_changed", rows_changed, {"file_date": file_date_str})
+    track_metric("ingest.rows_without_owner", rows_without_owner, {"file_date": file_date_str})
     track_metric("ingest.duration_ms", duration_ms)
     track_event("IngestOIR.Complete", {"file": file_name, "rows": rows_processed})
+
+    # A demand with no owner email cannot be notified. Today that's every row,
+    # because the OIR file has no PM/TM/EM email columns yet -- this metric is
+    # how we'll see them land (ADR 0008). Warn rather than fail: ingestion,
+    # snapshotting and history are all still valuable without it.
+    if rows_without_owner:
+        logger.warning(
+            "%d/%d demands have no owner email and cannot be notified. "
+            "Add PM_EMAIL/TM_EMAIL/EM_EMAIL columns to the OIR file, or set "
+            "GRAPH_LOOKUP_ENABLED=true once Graph consent is granted.",
+            rows_without_owner, total_rows,
+        )
 
     return func.HttpResponse(
         json.dumps({
@@ -235,16 +262,38 @@ def ingest_oir(req: func.HttpRequest) -> func.HttpResponse:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_email(display_name: str, graph: GraphClient, db: CosmosDbClient) -> str | None:
+def _resolve_email(
+    display_name: str,
+    file_email: str,
+    graph: GraphClient | None,
+    db: CosmosDbClient,
+) -> str:
+    """Owner email, preferring what the OIR file already tells us.
+
+    Order: the file's own email column -> the PersonMap cache -> a Microsoft
+    Graph lookup by display name. The file is authoritative and needs no
+    permissions; Graph is an optional backstop that requires admin-consented
+    application permissions the tenant has not granted (ADR 0008). When
+    neither is available this returns "" and the demand simply has no
+    notifiable owner -- ingestion still records everything else.
+    """
+    if file_email:
+        return file_email.strip()
     if not display_name:
-        return None
+        return ""
+
     cached = db.get_cached_email(display_name)
     if cached:
         return cached
+
+    if graph is None:
+        return ""
+
     email = graph.resolve_email(display_name)
     if email:
         db.cache_email(display_name, email)
-    return email
+        return email
+    return ""
 
 
 def _graph_token_for_file_download() -> str:
