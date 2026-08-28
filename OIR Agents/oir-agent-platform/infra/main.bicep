@@ -131,6 +131,9 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         // Owner emails come from the OIR file (ADR 0008); Graph lookup is an
         // optional backstop that needs admin-consented app permissions.
         { name: 'GRAPH_LOOKUP_ENABLED', value: 'false' }
+        // Single escalation contact for demands stale past
+        // staleness.escalation_adh_days. Not derivable from the OIR file.
+        { name: 'ACCOUNT_DELIVERY_HEAD_EMAIL', value: '' }
         { name: 'PMO_MEMBER_EMAILS', value: '' }
         { name: 'PMO_GROUP_ID', value: '' }
         { name: 'PMO_OWNER_EMAIL', value: '' }

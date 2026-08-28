@@ -20,6 +20,7 @@ history of this data store's evolution.
 from __future__ import annotations
 
 import logging
+import os
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 _STALENESS_CFG = CONFIG["staleness"]
 _EXPIRY_CFG = CONFIG["expiry"]
+_NOTIFICATION_CFG = CONFIG["notification"]
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +47,16 @@ def run_rules(today: date | None = None) -> dict[str, Any]:
     excluded = tuple(_STALENESS_CFG["excluded_statuses"])
     stale_threshold = _STALENESS_CFG["threshold_days"]
     l2_threshold = _STALENESS_CFG["escalation_l2_days"]
-    l3_threshold = _STALENESS_CFG["escalation_l3_days"]
+    adh_threshold = _STALENESS_CFG["escalation_adh_days"]
     lookahead = _EXPIRY_CFG["lookahead_days"]
+
+    adh_email = account_delivery_head_email()
+    if not adh_email:
+        logger.warning(
+            "ACCOUNT_DELIVERY_HEAD_EMAIL is not set; demands stale for >=%s days "
+            "will still notify PM/TM/EM but the escalation to the Account "
+            "Delivery Head will not be sent.", adh_threshold,
+        )
 
     with CosmosDbClient() as db:
         active_rows = db.list_active_demands()
@@ -90,7 +100,7 @@ def run_rules(today: date | None = None) -> dict[str, Any]:
         if stale_days < stale_threshold:
             continue
 
-        rule_tag, recipients = _escalation_tier(stale_days, l2_threshold, l3_threshold)
+        rule_tag, recipients = _escalation_tier(stale_days, l2_threshold, adh_threshold)
         item = {
             "demand_id": row.get("DemandID", ""),
             "project": row.get("Project", ""),
@@ -101,24 +111,39 @@ def run_rules(today: date | None = None) -> dict[str, Any]:
             "rule": rule_tag,
         }
 
-        for field in _recipient_fields(recipients):
-            email = row.get(field, "")
+        targets = [row.get(f, "") for f in _recipient_fields(recipients)]
+        if "adh" in recipients and adh_email:
+            targets.append(adh_email)
+        for email in targets:
             if email:
                 recipient_map[email]["stale"].append(item)
 
     # -----------------------------------------------------------------------
     # Build final payload
     # -----------------------------------------------------------------------
+    max_items = _NOTIFICATION_CFG["max_items_per_digest"]
     recipients_list = []
     for email, buckets in recipient_map.items():
-        # Sort stale by stale_days desc; expiring by days_left asc
+        # Most urgent first, since anything past the cap is only summarised.
         buckets["stale"].sort(key=lambda x: x["stale_days"], reverse=True)
         buckets["expiring"].sort(key=lambda x: x["days_left"])
-        recipients_list.append({
+
+        stale, expiring = buckets["stale"], buckets["expiring"]
+        entry = {
             "email": email,
-            "expiring": buckets["expiring"],
-            "stale": buckets["stale"],
-        })
+            "expiring": expiring[:max_items],
+            "stale": stale[:max_items],
+        }
+        # Never drop demands silently: tell the reader what was left out, so a
+        # capped digest reads as "10 of 61" rather than looking complete.
+        if len(stale) > max_items or len(expiring) > max_items:
+            entry["truncated"] = {
+                "stale_shown": len(entry["stale"]),
+                "stale_total": len(stale),
+                "expiring_shown": len(entry["expiring"]),
+                "expiring_total": len(expiring),
+            }
+        recipients_list.append(entry)
 
     return {
         "run_date": today.isoformat(),
@@ -140,13 +165,40 @@ def _days_left(dem_end_date_str: str | None, today: date) -> int:
         return 999
 
 
+def _business_days_between(start: date, end: date) -> int:
+    """Weekdays strictly after *start*, up to and including *end*.
+
+    Mon->Tue is 1; Fri->Mon is also 1, because no OIR file is produced at
+    the weekend so no update could have happened then.
+    """
+    if end <= start:
+        return 0
+    days = 0
+    cur = start
+    while cur < end:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:      # Mon-Fri
+            days += 1
+    return days
+
+
 def _stale_days(last_content_change_date_str: str | None, today: date, default: int) -> int:
+    """Age of a demand's last content change.
+
+    Counted in BUSINESS days by default. The OIR file is weekday-only, so a
+    demand can never last-change on a weekend; with calendar days the 4-5 day
+    L2 window falls entirely on Sat+Sun every Thursday, making that tier
+    unreachable and escalating L1 straight to the Account Delivery Head.
+    """
     if not last_content_change_date_str:
         return default
     try:
-        return (today - date.fromisoformat(last_content_change_date_str[:10])).days
+        changed = date.fromisoformat(last_content_change_date_str[:10])
     except ValueError:
         return default
+    if _STALENESS_CFG.get("use_business_days", True):
+        return _business_days_between(changed, today)
+    return (today - changed).days
 
 
 def _is_snoozed(row: dict, now: datetime) -> bool:
@@ -173,22 +225,46 @@ def _notified_today(row: dict, today: date) -> bool:
         return False
 
 
-def _escalation_tier(stale_days: int, l2: int, l3: int) -> tuple[str, list[str]]:
-    if stale_days >= l3:
-        return "ESCALATION_L3", ["pm", "tm", "em", "dm"]
+def _escalation_tier(stale_days: int, l2: int, adh: int) -> tuple[str, list[str]]:
+    """Who gets told, and under which rule tag.
+
+    The ladder adds people rather than replacing them, so the owner stays on
+    the thread as it escalates above them.
+
+    The top tier goes to the Account Delivery Head, NOT to the file's
+    SL_DM_NAME: that column holds the same person as TM_NAME on 206 of 209
+    rows, so "escalating" to it merely re-sends to whoever already had the
+    first nudge.
+    """
+    if stale_days >= adh:
+        return "ESCALATION_ADH", ["pm", "tm", "em", "adh"]
     if stale_days >= l2:
         return "ESCALATION_L2", ["pm", "tm", "em"]
     return "STALE_2D", ["pm", "tm"]
 
 
 def _recipient_fields(roles: list[str]) -> list[str]:
+    """Map roles to the demand fields holding their address.
+
+    'adh' is deliberately absent: it is one configured person for the whole
+    account, not a per-demand column, and is added in run_rules().
+    """
     mapping = {
         "pm": "PMEmail",
         "tm": "TMEmail",
         "em": "EMEmail",
-        "dm": "DMEmail",   # optional field; absent rows are skipped silently
     }
     return [mapping[r] for r in roles if r in mapping]
+
+
+def account_delivery_head_email() -> str:
+    """The single escalation contact for the account, from configuration.
+
+    Returns "" when unset, in which case ADH-tier demands still notify the
+    PM/TM/EM and a warning is logged -- better than dropping the escalation
+    silently.
+    """
+    return os.environ.get("ACCOUNT_DELIVERY_HEAD_EMAIL", "").strip()
 
 
 def _gate(parsed: dict) -> str:

@@ -1,8 +1,10 @@
 {
   "staleness": {
+    "//": "Thresholds are BUSINESS days. The OIR file is produced on weekdays only, so a demand can never last-change on a weekend. With calendar days the 4-5 day L2 window lands entirely on Sat+Sun every Thursday, making that tier unreachable and jumping L1 straight to L3. Set use_business_days=false to revert.",
+    "use_business_days": true,
     "threshold_days": 2,
     "escalation_l2_days": 4,
-    "escalation_l3_days": 6,
+    "escalation_adh_days": 5,
     "excluded_statuses": ["Joined", "To be deleted"]
   },
   "expiry": {
@@ -10,7 +12,8 @@
     "ignore_snooze": true
   },
   "notification": {
-    "max_cards_per_message": 10,
+    "//": "max_items_per_digest caps the demands listed individually in one message; the rest are summarised as a count so nothing is silently dropped. Escalation recipients are resolved per tier: 'adh' is the Account Delivery Head, a single configured address (ACCOUNT_DELIVERY_HEAD_EMAIL) rather than a column in the OIR file - SL_DM_NAME is the same person as TM_NAME on 206/209 rows, so escalating to it is a no-op.",
+    "max_items_per_digest": 10,
     "snooze_hours": 24,
     "digest_time_ist": "09:00",
     "ingest_deadline_ist": "09:30"

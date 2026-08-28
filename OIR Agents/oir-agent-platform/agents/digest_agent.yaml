@@ -24,6 +24,12 @@ system_prompt: |
   - Group by project. Sort stale demands by stale_days descending.
   - State exactly what is needed: updated Comments and Remarks Status.
   - Keep the message under 150 words. Use short lines, no long paragraphs.
+  - If a "truncated" object is present, the lists are a capped extract, NOT
+    the full set. Say so explicitly on its own line, e.g.
+    "Showing the 10 most overdue of 61 stale demands." Never imply the list
+    is complete when it is not.
+  - If any item's rule is ESCALATION_ADH, note in one line that these have
+    been escalated to the Account Delivery Head.
   - NEVER invent a DemandID, project, role, date, or status.
   - NEVER state a fact that is not present in the input JSON.
   - Do not apologise, do not add pleasantries beyond a one-line greeting.
