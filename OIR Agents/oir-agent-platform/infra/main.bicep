@@ -137,6 +137,17 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'PMO_MEMBER_EMAILS', value: '' }
         { name: 'PMO_GROUP_ID', value: '' }
         { name: 'PMO_OWNER_EMAIL', value: '' }
+        // Email delivery (ADR 0010). These gates fail closed: with
+        // EMAIL_ENABLED true but no redirect set, sending is refused rather
+        // than falling through to real recipients. EMAIL_ACS_CONNECTION_STRING
+        // is set out-of-band, not here -- it is the one secret the no-secrets
+        // design could not avoid, because granting the managed identity a role
+        // on the ACS resource needs roleAssignments/write, which is denied.
+        { name: 'EMAIL_ENABLED', value: 'false' }
+        { name: 'EMAIL_REDIRECT_TO', value: '' }
+        { name: 'EMAIL_ALLOW_REAL_RECIPIENTS', value: 'false' }
+        { name: 'EMAIL_SENDER_ADDRESS', value: '' }
+        { name: 'EMAIL_ACS_ENDPOINT', value: '' }
         // No TEAMS_BOT_APP_PASSWORD: when the bot is registered it should use
         // a managed-identity bot type (MicrosoftAppType=SystemAssignedMSI),
         // which has no password at all. Revisit only if a password-based bot

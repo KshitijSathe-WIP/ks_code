@@ -69,8 +69,29 @@ live requires deliberately setting a second flag.
 `tests/test_notifier.py` enumerates all eight combinations of the three
 gates and asserts exactly one reaches a real address.
 
-Transport is Azure Communication Services, authenticated by managed identity
-where available, consistent with the no-secrets design in ADR 0007.
+Transport is Azure Communication Services, provisioned in TD-BANK-POC:
+
+    emailServices/oir-email-dev
+      domains/AzureManagedDomain -> b782f25f-...-224b27159679.azurecomm.net
+    communicationServices/oir-acs-dev
+      sender: DoNotReply@b782f25f-...-224b27159679.azurecomm.net
+
+The `az communication` CLI extension could not be installed -- the extension
+index fails TLS verification behind the corporate proxy -- so all three
+resources were created through the ARM REST API instead.
+
+This is the one place the no-secrets design (ADR 0007) could not be held.
+Authenticating with the Function App's managed identity needs a role
+assignment on the ACS resource, and `roleAssignments/write` is denied to
+this account, exactly as it was for Key Vault:
+
+    AuthorizationFailed ... does not have authorization to perform action
+    'Microsoft.Authorization/roleAssignments/write'
+
+So `EMAIL_ACS_CONNECTION_STRING` is stored as a Function App setting. It is
+never committed, and `notifier.send_email()` prefers `EMAIL_ACS_ENDPOINT`
+with a managed identity whenever one is granted -- switching over later
+means setting one variable and clearing the other, with no code change.
 
 ## Consequences
 
