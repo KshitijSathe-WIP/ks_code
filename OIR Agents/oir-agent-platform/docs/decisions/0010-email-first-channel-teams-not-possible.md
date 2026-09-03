@@ -104,10 +104,13 @@ means setting one variable and clearing the other, with no code change.
   `display_name` is derived from that email -- so a shadow digest would have
   opened "Hi Kshitij" instead of showing what the real owner would read.
   Redirection now happens only at delivery.
-- Deliverability from an ACS-managed domain (`*.azurecomm.net`) to
-  `wipro.com` is unproven and may be filtered by Wipro's gateway. Testing to
-  our own mailbox first surfaces this immediately; a custom verified domain
-  is the fallback.
+- Deliverability from the ACS-managed domain (`*.azurecomm.net`) to
+  `wipro.com` was the main open risk, since Wipro's gateway could have
+  filtered an unfamiliar sending domain outright. Confirmed working on
+  2026-09-03: a digest sent from
+  `DoNotReply@b782f25f-...azurecomm.net` reached the test mailbox. A custom
+  verified domain is therefore not needed for the pilot, though it remains
+  the answer if volume or reputation becomes an issue at scale.
 - Replies are out of scope for this channel. The reply-interpreter agent
   assumed a Teams conversation; inbound email parsing is a separate problem
   and is not solved here.
