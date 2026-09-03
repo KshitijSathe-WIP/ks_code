@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Optional
 
 from azure.ai.projects import AIProjectClient
@@ -36,7 +37,25 @@ from azure.identity import ClientSecretCredential, ManagedIdentityCredential
 
 logger = logging.getLogger(__name__)
 
-RECIPIENT_NAME_TOKEN = "{{RECIPIENT_NAME}}"
+# A bare identifier, deliberately not name-shaped and not mustache-wrapped.
+# Measured over 12 identical calls with only this value changed:
+#   "Alex" (a real-looking name) -> 12/12 refusals
+#   "{{RECIPIENT_NAME}}"         ->  2/12
+#   "NAME_PLACEHOLDER"           ->  0/12
+# A real name refuses every time -- the account's PII filter, which is the
+# whole reason for ADR 0005 -- and the mustache braces read as "fill in this
+# template from data you do not have", which the model also sometimes
+# declines. Anything substituted here must stay unique enough for
+# restore_pii() to swap back safely.
+RECIPIENT_NAME_TOKEN = "NAME_PLACEHOLDER"
+
+# Refusals arrive as ordinary text, not errors, so they have to be recognised
+# by content. A digest containing one must never be emailed.
+_REFUSAL_RE = re.compile(
+    r"\b(i'm sorry|i am sorry|cannot assist|can't assist|unable to assist|"
+    r"can(?:not|'t) help with (?:that|this))\b", re.IGNORECASE)
+
+DIGEST_MAX_ATTEMPTS = 3
 
 _project_client: Optional[AIProjectClient] = None
 _openai_clients: dict[str, object] = {}
@@ -44,6 +63,15 @@ _openai_clients: dict[str, object] = {}
 
 class FoundryAgentError(RuntimeError):
     """Raised when a Foundry agent call fails or returns no usable reply."""
+
+
+class AgentRefusedError(FoundryAgentError):
+    """The agent declined the request on every attempt.
+
+    Distinct from ContentFilteredError: nothing was blocked at the API
+    level, the model simply answered with a refusal. Callers should skip
+    the message entirely -- a refusal must never be delivered to a user.
+    """
 
 
 class ContentFilteredError(FoundryAgentError):
@@ -61,16 +89,27 @@ def _get_credential():
     Developer on this Foundry account). IDENTITY_ENDPOINT is set by Azure
     Functions/App Service only when a managed identity is available, so it
     reliably distinguishes deployed-in-Azure from local/CLI dev.
+
+    Locally, a service principal is used only if one is fully configured;
+    otherwise this falls back to the signed-in az CLI user. That ordering
+    mirrors cosmos_client._get_credential() and matters for shadow runs:
+    the no-secrets design (ADR 0007) means AZURE_CLIENT_SECRET is normally
+    empty, and demanding it would make every local digest run impossible.
     """
     if os.environ.get("IDENTITY_ENDPOINT"):
         logger.info("Using the Function App's managed identity for Foundry auth")
         return ManagedIdentityCredential()
-    logger.info("No managed identity available -- falling back to sp-oir-dev service principal")
-    return ClientSecretCredential(
-        tenant_id=os.environ["AZURE_TENANT_ID"],
-        client_id=os.environ["AZURE_CLIENT_ID"],
-        client_secret=os.environ["AZURE_CLIENT_SECRET"],
-    )
+
+    sp = (os.environ.get("AZURE_TENANT_ID", ""),
+          os.environ.get("AZURE_CLIENT_ID", ""),
+          os.environ.get("AZURE_CLIENT_SECRET", ""))
+    if all(sp):
+        logger.info("Using the sp-oir-dev service principal for Foundry auth")
+        return ClientSecretCredential(tenant_id=sp[0], client_id=sp[1], client_secret=sp[2])
+
+    logger.info("No managed identity or service principal -- using the az CLI login")
+    from azure.identity import AzureCliCredential
+    return AzureCliCredential()
 
 
 def _get_project_client() -> AIProjectClient:
@@ -97,27 +136,61 @@ def _is_content_filter_error(exc: Exception) -> bool:
     return "content_filter" in str(exc)
 
 
-def invoke_agent(agent_name: str, message: str) -> str:
+def looks_like_refusal(text: str) -> bool:
+    """Is this reply a refusal rather than a usable answer?
+
+    Refusals also arrive *appended to a half-finished answer*: the response
+    carries two output items and output_text concatenates them, producing
+    text like "...(13 daysI'm sorry, but I cannot assist with that request."
+    So this checks anywhere in the string, not just the start.
+    """
+    return bool(_REFUSAL_RE.search(text or ""))
+
+
+def invoke_agent(agent_name: str, message: str,
+                 max_attempts: int = DIGEST_MAX_ATTEMPTS) -> str:
     """Send *message* to the named v1 agent and return its reply text.
 
     The caller is responsible for ensuring *message* contains no PII --
     see scrub_recipient().
+
+    Retries on refusals. Even with the PII-safe placeholder and an explicit
+    instruction, roughly one call in ten still comes back as "I'm sorry, but
+    I cannot assist with that request" -- sometimes glued onto a partial
+    answer. Retrying is effective because the failure is non-deterministic;
+    three attempts take the residual rate to well under 1%. If every attempt
+    refuses we raise, so the caller skips delivery rather than emailing a
+    half-written message.
     """
     client = _get_openai_client(agent_name)
-    try:
-        response = client.responses.create(input=message)
-    except Exception as exc:
-        if _is_content_filter_error(exc):
-            raise ContentFilteredError(
-                f"Agent '{agent_name}' prompt was blocked by the content filter "
-                f"(most likely PII in free text): {exc}"
-            ) from exc
-        raise FoundryAgentError(f"Agent '{agent_name}' call failed: {exc}") from exc
+    last_reply = ""
 
-    reply = (response.output_text or "").strip()
-    if not reply:
-        raise FoundryAgentError(f"Agent '{agent_name}' returned an empty reply")
-    return reply
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.responses.create(input=message)
+        except Exception as exc:
+            if _is_content_filter_error(exc):
+                raise ContentFilteredError(
+                    f"Agent '{agent_name}' prompt was blocked by the content filter "
+                    f"(most likely PII in free text): {exc}"
+                ) from exc
+            raise FoundryAgentError(f"Agent '{agent_name}' call failed: {exc}") from exc
+
+        reply = (response.output_text or "").strip()
+        if reply and not looks_like_refusal(reply):
+            if attempt > 1:
+                logger.info("Agent '%s' succeeded on attempt %d", agent_name, attempt)
+            return reply
+
+        last_reply = reply
+        logger.warning("Agent '%s' %s on attempt %d/%d", agent_name,
+                       "refused" if reply else "returned an empty reply",
+                       attempt, max_attempts)
+
+    raise AgentRefusedError(
+        f"Agent '{agent_name}' refused or returned nothing on all "
+        f"{max_attempts} attempts; last reply: {last_reply[:200]!r}"
+    )
 
 
 def invoke_agent_json(agent_name: str, message: str) -> dict:
