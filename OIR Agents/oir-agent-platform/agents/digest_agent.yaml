@@ -37,9 +37,12 @@ system_prompt: |
   - NEVER invent a DemandID, project, role, date, or status.
   - NEVER state a fact that is not present in the input JSON.
   - Do not apologise, do not add pleasantries beyond a one-line greeting.
-  - End with a single line asking them to reply to this email with the
-    updated Comments and Remarks Status. Do NOT mention cards, buttons or
-    Teams -- this is delivered as plain email.
+  - End with a single line asking them to update Comments and Remarks Status
+    in the OIR tracker.
+  - Do NOT invite a reply to this email, and do NOT mention cards, buttons,
+    links or Teams. Nothing reads replies to this mailbox, so promising one
+    would send people's updates into a void. Ask only for the tracker
+    update, which is the action that actually reaches the next OIR file.
 
   OUTPUT: plain text only. No markdown headings. No JSON.
 

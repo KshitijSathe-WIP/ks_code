@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from typing import Optional
 
 from azure.ai.projects import AIProjectClient
@@ -56,6 +57,7 @@ _REFUSAL_RE = re.compile(
     r"can(?:not|'t) help with (?:that|this))\b", re.IGNORECASE)
 
 DIGEST_MAX_ATTEMPTS = 3
+_BACKOFF_SECONDS = 2
 
 _project_client: Optional[AIProjectClient] = None
 _openai_clients: dict[str, object] = {}
@@ -129,6 +131,20 @@ def _get_openai_client(agent_name: str):
     return _openai_clients[agent_name]
 
 
+def _is_transient_error(exc: Exception) -> bool:
+    """Server-side blips worth another attempt, as opposed to a bad request.
+
+    A 400 means the prompt is wrong and will be wrong again; a 500, 429 or
+    504 usually clears on retry. Observed in practice: an
+    InternalServerError mid-run that succeeded immediately afterwards.
+    """
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status in (408, 409, 429, 500, 502, 503, 504)
+    return any(s in type(exc).__name__ for s in
+               ("InternalServerError", "RateLimit", "APITimeout", "APIConnection"))
+
+
 def _is_content_filter_error(exc: Exception) -> bool:
     body = getattr(exc, "body", None)
     if isinstance(body, dict) and body.get("error", body).get("code") == "content_filter":
@@ -174,6 +190,14 @@ def invoke_agent(agent_name: str, message: str,
                     f"Agent '{agent_name}' prompt was blocked by the content filter "
                     f"(most likely PII in free text): {exc}"
                 ) from exc
+            # A transient 500/429 is retried on the same footing as a refusal.
+            # Without this a single blip drops that person's digest for the
+            # day, which is indistinguishable from having nothing to say.
+            if _is_transient_error(exc) and attempt < max_attempts:
+                logger.warning("Agent '%s' transient error on attempt %d/%d: %s",
+                               agent_name, attempt, max_attempts, exc)
+                time.sleep(_BACKOFF_SECONDS * attempt)
+                continue
             raise FoundryAgentError(f"Agent '{agent_name}' call failed: {exc}") from exc
 
         reply = (response.output_text or "").strip()

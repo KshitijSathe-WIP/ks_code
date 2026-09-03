@@ -110,6 +110,45 @@ class TestRetry:
         assert client.responses.create.call_count == 5
 
 
+class TestTransientErrors:
+    """A server blip must not cost that recipient their digest for the day."""
+
+    class Boom(Exception):
+        def __init__(self, status):
+            super().__init__(f"status {status}")
+            self.status_code = status
+
+    def _client_raising_then(self, exc, then):
+        client = MagicMock()
+        client.responses.create.side_effect = [exc, MagicMock(output_text=then)]
+        return client
+
+    @pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+    def test_transient_status_is_retried(self, status):
+        client = self._client_raising_then(self.Boom(status), GOOD)
+        with patch.object(foundry_client, "_get_openai_client", return_value=client), \
+             patch.object(foundry_client, "_BACKOFF_SECONDS", 0):
+            assert foundry_client.invoke_agent("digest-agent", "p") == GOOD
+        assert client.responses.create.call_count == 2
+
+    def test_bad_request_is_not_retried(self):
+        """A 400 means the prompt is wrong; retrying just wastes a call."""
+        client = self._client_raising_then(self.Boom(400), GOOD)
+        with patch.object(foundry_client, "_get_openai_client", return_value=client):
+            with pytest.raises(foundry_client.FoundryAgentError):
+                foundry_client.invoke_agent("digest-agent", "p")
+        assert client.responses.create.call_count == 1
+
+    def test_persistent_transient_error_eventually_raises(self):
+        client = MagicMock()
+        client.responses.create.side_effect = self.Boom(500)
+        with patch.object(foundry_client, "_get_openai_client", return_value=client), \
+             patch.object(foundry_client, "_BACKOFF_SECONDS", 0):
+            with pytest.raises(foundry_client.FoundryAgentError):
+                foundry_client.invoke_agent("digest-agent", "p")
+        assert client.responses.create.call_count == 3
+
+
 class TestPlaceholderToken:
     """The token is load-bearing: a real-looking name refused 12/12 times."""
 
