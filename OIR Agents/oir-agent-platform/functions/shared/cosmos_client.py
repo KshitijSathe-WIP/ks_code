@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from azure.cosmos import CosmosClient
@@ -45,6 +45,7 @@ CONTAINER_DEMANDS = "Demands"
 CONTAINER_SNAPSHOTS = "SnapshotHistory"
 CONTAINER_INTERACTIONS = "InteractionLog"
 CONTAINER_PERSON_MAP = "PersonMap"
+CONTAINER_ACTION_TOKENS = "ActionTokens"
 
 _UNSAFE_ID_CHARS = re.compile(r"[/\\?#]")
 
@@ -86,6 +87,7 @@ class CosmosDbClient:
         self._snapshots = self._db.get_container_client(CONTAINER_SNAPSHOTS)
         self._interactions = self._db.get_container_client(CONTAINER_INTERACTIONS)
         self._person_map = self._db.get_container_client(CONTAINER_PERSON_MAP)
+        self._action_tokens = self._db.get_container_client(CONTAINER_ACTION_TOKENS)
 
     # ------------------------------------------------------------------
     # oir_demand equivalent: Demands
@@ -168,6 +170,44 @@ class CosmosDbClient:
             "CreatedAt": entry.created_at.isoformat() + "Z",
         }
         self._interactions.upsert_item(doc)
+
+    # ------------------------------------------------------------------
+    # ActionTokens: opaque update-form links (see shared/action_token.py)
+    # ------------------------------------------------------------------
+
+    def put_action_token(self, token, ttl_seconds: int) -> None:
+        """Store a link token. `ttl` is Cosmos's native per-document expiry,
+        so lapsed links disappear without a cleanup job."""
+        self._action_tokens.upsert_item({
+            "id": token.token,
+            "TokenId": token.token,
+            "Email": token.email,
+            "ExpiresAt": token.expires_at.isoformat(),
+            "ttl": int(ttl_seconds),
+        })
+
+    def get_action_token(self, token_value: str):
+        from functions.shared.action_token import ActionToken
+
+        try:
+            doc = self._action_tokens.read_item(item=token_value, partition_key=token_value)
+        except CosmosResourceNotFoundError:
+            return None
+        expires = doc.get("ExpiresAt") or ""
+        try:
+            expires_at = datetime.fromisoformat(expires)
+        except ValueError:
+            return None
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return ActionToken(token=doc["id"], email=doc.get("Email", ""),
+                           expires_at=expires_at)
+
+    def revoke_action_token(self, token_value: str) -> None:
+        try:
+            self._action_tokens.delete_item(item=token_value, partition_key=token_value)
+        except CosmosResourceNotFoundError:
+            pass
 
     # ------------------------------------------------------------------
     # oir_person_map equivalent: PersonMap (cache)
