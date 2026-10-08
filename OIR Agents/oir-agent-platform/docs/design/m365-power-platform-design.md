@@ -306,12 +306,12 @@ Teams only, **sign-in required** (SSO).
 | Asset | Disposition |
 |---|---|
 | `functions/` Python (rules, ingestion, parser, header_map, core) and its ~230 committed tests | **Kept as the specification and test oracle**, moved under `reference/` once the engine passes parity |
-| Cosmos DB, Function App, ACS email, Foundry project agents | Decommission after the pilot passes. Cosmos stays as the rollback until then |
+| Cosmos `OIRPlatform` database, Function App + plan, ACS email, Key Vault, App Insights, Log Analytics, storage, `snet-oir-func`, the four OIR Foundry agents, `sp-oir-dev` | **Removed 2026-10-08 at the owner's direction**, ahead of the pilot, so there is **no live rollback**. Rebuilding is possible but not free: `infra/main.bicep` re-provisions the resources and `infra/backfill_history.py` replays the 14 committed files into Cosmos. Anything shared was left alone (see ADR 0011) |
 | `digest-agent` | **Retired.** A card renders structured data directly. The model added wording only, caused 10-50% refusals, and needed a retry and refusal guard. Removing it removes that whole failure class |
 | `reply-interpreter` | Superseded by Copilot Studio slot-filling + confirmation |
 | `trend-agent`, `orchestrator` | Parked, not part of this scope |
 | `update_form/`, `action_token.py`, `apply_update/core.py`, digest-link code and their tests | Superseded (cards give a real identity, which the token links existed to fake). **Done 2026-10-08:** archived on branch `archive/web-form-token-links` (`cf823e0`) and removed from `experiments` |
-| **Deployed leftovers** from that work | Possibly present in Azure: `update_form` on the Function App, an `ActionTokens` Cosmos container, an `UPDATE_FORM_BASE_URL` app setting. **Not yet verified or removed**: the Azure CLI session was revoked by a tenant-side reset on 2026-10-07 and needs an interactive `az login` |
+| Deployed leftovers from that work | Gone with the Function App and the `OIRPlatform` database (the `ActionTokens` container held 0 rows) |
 
 Correction to my own earlier work: the form's results page says changes "appear in
 tomorrow's OIR file". I never verified that, and it is the same open question as D1.

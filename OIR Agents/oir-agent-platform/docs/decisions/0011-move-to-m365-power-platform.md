@@ -50,5 +50,21 @@ the model added only wording while causing the refusal failures measured earlier
 - Several assumptions about the Wipro tenant are unverified (design section 2), among
   them premium-connector licensing, Teams policy for the Workflows bot, and Office
   Scripts. This ADR should not move to Accepted until those spikes pass.
-- The Azure resources stay as the rollback until a pilot succeeds, then are
-  decommissioned. Uncommitted web-form work is archived, not deleted.
+- The OIR Azure resources were **removed on 2026-10-08, before any pilot**, at the
+  owner's direction. The original plan kept them as the rollback; that safety net
+  is gone. The 14 source files, the Python code and `infra/` remain in git, so the
+  platform can be rebuilt, but not instantly.
+- What was removed: the `OIRPlatform` Cosmos database (352 demands, 3,104
+  snapshots, 43 owners; `InteractionLog` was empty), the Function App and its plan,
+  ACS email, Key Vault, App Insights, Log Analytics, storage, the `snet-oir-func`
+  subnet, four Foundry agents, and the `sp-oir-dev` app registration.
+- What was deliberately **left alone** because other work depends on it: the
+  `TD-BANK-POC` resource group; the `td-bank-cosmos` account and its `IncidentRCA`
+  and `lineage` databases; the `TD-BANK` Foundry project and its other agents
+  (`Incident-RCA-Agent`, `lineage-agent`, `TestMyAPI`); the `TD-BANK` VNet and its
+  other subnets; `td-rca-api`, `data-tools-app` and their plans.
+- Not removable from here: role assignments granted to the deleted Function App
+  identity at resource-group scope (Contributor, Azure AI Developer, Key Vault
+  Secrets User). They are inert now that the identity is gone but remain as
+  orphans until the subscription owner deletes them.
+- Uncommitted web-form work is archived on `archive/web-form-token-links`.
